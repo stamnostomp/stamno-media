@@ -1,0 +1,223 @@
+/* Stamno Design System — tokens and effects on top of Tachyons.
+   Monochrome hacker-terminal: Courier only, square corners, 1px borders. */
+
+:root {
+  --black: #000000;
+  --void: #0a0b0d;
+  --gray-1: #1a1a1a;
+  --gray-2: #333333;
+  --gray-3: #666666;
+  --gray-4: #808080;
+  --gray-5: #c0c0c0;
+  --gray-6: #e8e8e8;
+  --white: #ffffff;
+}
+
+* {
+  border-radius: 0 !important;
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--black);
+  color: var(--white);
+  font-family: "Courier New", Courier, monospace;
+}
+
+/* ---- color ramp ---- */
+.fg-primary { color: var(--white); }
+.fg-secondary { color: var(--gray-5); }
+.fg-muted { color: var(--gray-4); }
+.fg-ghost { color: var(--gray-2); }
+.bg-page { background: var(--black); }
+.bg-panel { background: var(--gray-1); }
+.b--default { border-color: var(--gray-3); }
+.b--strong { border-color: var(--white); }
+.b--trans { border-color: transparent; }
+.b--dashed { border-style: dashed; }
+
+/* ---- type ---- */
+.tracked-wide { letter-spacing: 0.1em; }
+.tracked-wider { letter-spacing: 0.2em; }
+.text-md { font-size: 1.125rem; }
+.text-xl { font-size: 2rem; }
+
+/* ---- spacing helpers Tachyons lacks (12/24/48px + flex gap) ---- */
+.gap-1 { gap: 4px; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.gap-4 { gap: 16px; }
+.gap-5 { gap: 24px; }
+.gap-6 { gap: 32px; }
+.gap-7 { gap: 48px; }
+.pa-7 { padding: 48px; }
+.ph-7 { padding-left: 48px; padding-right: 48px; }
+.pb-3 { padding-bottom: 12px; }
+.mb-5 { margin-bottom: 24px; }
+
+/* ---- CRT / VHS full-viewport overlays ---- */
+.crt-scanlines {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgba(255, 255, 255, 0.03) 0px,
+    rgba(255, 255, 255, 0.03) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.vhs-tracking {
+  position: fixed;
+  inset: 0;
+  z-index: 91;
+  pointer-events: none;
+  opacity: 0.04;
+  background-image: repeating-linear-gradient(
+    115deg,
+    transparent 0px,
+    rgba(255, 255, 255, 0.5) 1px,
+    transparent 2px,
+    transparent 41px
+  );
+  background-size: 200% 200%;
+  animation: vhs-drift 9s linear infinite;
+}
+
+@keyframes vhs-drift {
+  from { background-position: 0 0; }
+  to { background-position: 100% 100%; }
+}
+
+/* ---- layout ---- */
+.inline-flex { display: inline-flex; }
+
+.grid-fill {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 24px;
+}
+
+.sticky-top {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+}
+
+.hero-bg {
+  background: radial-gradient(circle at 70% 30%, var(--gray-2) 0%, var(--void) 60%);
+}
+
+.backdrop-bg {
+  background: radial-gradient(circle at 30% 20%, var(--gray-2) 0%, var(--void) 65%);
+}
+
+.stage-bg {
+  background: radial-gradient(circle at 50% 45%, var(--gray-2) 0%, var(--void) 70%);
+}
+
+/* ---- carousel rows: arrows are the only scroll affordance ---- */
+.row-scroll {
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+}
+
+.row-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---- poster cards: title/meta fade in on hover only ---- */
+.poster {
+  border: 1px solid var(--gray-3);
+  background: var(--gray-1);
+  overflow: hidden;
+}
+
+.poster:hover {
+  border-color: var(--white);
+}
+
+.reveal {
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.poster:hover .reveal {
+  opacity: 1;
+}
+
+.fade-up {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.9), transparent);
+}
+
+.fade-up-strong {
+  background: linear-gradient(0deg, rgba(0, 0, 0, 0.92), transparent);
+}
+
+/* ---- buttons ---- */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 44px;
+  padding: 0 24px;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.btn-primary {
+  background: var(--white);
+  color: var(--black);
+  border: 1px solid var(--white);
+}
+
+.btn-primary:hover {
+  background: var(--gray-6);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--white);
+  border: 1px solid var(--gray-3);
+}
+
+.btn-ghost:hover {
+  border-color: var(--white);
+}
+
+.arrow-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--gray-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+}
+
+.arrow-btn:hover {
+  border-color: var(--white);
+}
+
+.req-btn {
+  border: 1px solid var(--white);
+  cursor: pointer;
+}
+
+.req-btn:hover {
+  background: var(--white);
+  color: var(--black);
+}
+
+.req-row:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
