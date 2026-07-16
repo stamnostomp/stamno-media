@@ -9,6 +9,7 @@ module Catalog exposing
     , initial
     , movies
     , related
+    , searchBy
     , shows
     )
 
@@ -80,6 +81,20 @@ byGenre filter titles =
 
         Just genre ->
             List.filter (\t -> t.genre == genre) titles
+
+
+{-| Case-insensitive substring match on title. Empty string keeps all. -}
+searchBy : String -> List Title -> List Title
+searchBy query titles =
+    if String.isEmpty query then
+        titles
+
+    else
+        let
+            lower =
+                String.toLower query
+        in
+        List.filter (\t -> String.contains lower (String.toLower t.title)) titles
 
 
 movies : List Title -> List Title

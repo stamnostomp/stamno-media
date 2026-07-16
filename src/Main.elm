@@ -1,14 +1,26 @@
-module Main exposing (main)
+port module Main exposing (main)
 
 import Browser
 import Browser.Dom as Dom
+import Browser.Events
 import Catalog exposing (Genre(..), MediaType(..), Title)
 import Dict exposing (Dict)
-import Html exposing (Html, button, div, span, text)
-import Html.Attributes exposing (class, id, style)
-import Html.Events exposing (onClick)
+import Html exposing (Html, button, div, input, span, text)
+import Html.Attributes exposing (class, height, id, style, width)
+import Html.Events exposing (onClick, onInput)
+import Math.Vector2 as Vec2
 import Request
+import Shaders.Background
+import Shaders.Mesh
 import Task
+import WebGL
+
+
+
+-- PORTS
+
+
+port scrollRow : { rowId : String, delta : Float } -> Cmd msg
 
 
 
@@ -34,8 +46,11 @@ type alias Model =
     { screen : Screen
     , activeId : Int
     , filter : Maybe Genre
+    , search : String
     , requestsTab : Tab
     , requests : Dict Int Request.Entry
+    , time : Float
+    , resolution : { width : Float, height : Float }
     }
 
 
@@ -44,10 +59,13 @@ init _ =
     ( { screen = Home
       , activeId = 1
       , filter = Nothing
+      , search = ""
       , requestsTab = Mine
       , requests = Request.initialEntries
+      , time = 0
+      , resolution = { width = 1920, height = 1080 }
       }
-    , Cmd.none
+    , Task.perform GotViewport Dom.getViewport
     )
 
 
@@ -61,9 +79,13 @@ type Msg
     | OpenPlayer
     | BackFromPlayer
     | SetFilter (Maybe Genre)
+    | SetSearch String
     | SetTab Tab
     | RequestTitle Int
     | ScrollRow String Float
+    | Tick Float
+    | GotViewport Dom.Viewport
+    | WindowResized Int Int
     | NoOp
 
 
@@ -85,6 +107,9 @@ update msg model =
         SetFilter filter ->
             ( { model | filter = filter }, Cmd.none )
 
+        SetSearch query ->
+            ( { model | search = query }, Cmd.none )
+
         SetTab tab ->
             ( { model | requestsTab = tab }, Cmd.none )
 
@@ -92,19 +117,22 @@ update msg model =
             ( { model | requests = Request.request titleId model.requests }, Cmd.none )
 
         ScrollRow rowId delta ->
-            ( model, scrollRowBy rowId delta )
+            ( model, scrollRow { rowId = rowId, delta = delta } )
+
+        Tick delta ->
+            ( { model | time = model.time + delta * 0.001 }, Cmd.none )
+
+        GotViewport vp ->
+            ( { model | resolution = { width = vp.viewport.width, height = vp.viewport.height } }
+            , Cmd.none
+            )
+
+        WindowResized w h ->
+            ( { model | resolution = { width = toFloat w, height = toFloat h } }, Cmd.none )
 
         NoOp ->
             ( model, Cmd.none )
 
-
-{-| Nudge scrollLeft; the container's CSS scroll-behavior makes it smooth. -}
-scrollRowBy : String -> Float -> Cmd Msg
-scrollRowBy rowId delta =
-    Dom.getViewportOf rowId
-        |> Task.andThen
-            (\vp -> Dom.setViewportOf rowId (vp.viewport.x + delta) vp.viewport.y)
-        |> Task.attempt (\_ -> NoOp)
 
 
 
@@ -115,18 +143,41 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "STAMNO_MEDIA"
     , body =
-        [ div [ class "relative min-vh-100 bg-page fg-primary overflow-x-hidden" ]
-            [ div [ class "crt-scanlines" ] []
-            , div [ class "vhs-tracking" ] []
-            , if model.screen == Player then
+        [ viewBackground model
+        , div [ class "relative z-1 min-vh-100 fg-primary overflow-x-hidden" ]
+            [ if model.screen == Player then
                 text ""
 
               else
-                viewHeader model.screen
+                viewHeader model.screen model.search
             , viewScreen model
             ]
         ]
     }
+
+
+{-| Full-page background shader, fixed behind all content. -}
+viewBackground : Model -> Html Msg
+viewBackground model =
+    WebGL.toHtml
+        [ width (round model.resolution.width)
+        , height (round model.resolution.height)
+        , class "fixed top-0 left-0 z-0"
+        , style "width" "100vw"
+        , style "height" "100vh"
+        , style "pointer-events" "none"
+        ]
+        [ WebGL.entity
+            Shaders.Mesh.vertexShader
+            Shaders.Background.fragmentShader
+            Shaders.Mesh.fullscreenMesh
+            { time = model.time
+            , resolution = Vec2.vec2 model.resolution.width model.resolution.height
+            , mousePosition = Vec2.vec2 0 0
+            , hoveredBranch = -1.0
+            , centerPosition = Vec2.vec2 0 0
+            }
+        ]
 
 
 viewScreen : Model -> Html Msg
@@ -136,13 +187,13 @@ viewScreen model =
             viewHome model
 
         Movies ->
-            viewGridScreen "Movies" model.filter (Catalog.movies Catalog.catalog) yearMeta
+            viewGridScreen "Movies" model.filter model.search (Catalog.movies Catalog.catalog) yearMeta
 
         Shows ->
-            viewGridScreen "Shows" model.filter (Catalog.shows Catalog.catalog) durationMeta
+            viewGridScreen "Shows" model.filter model.search (Catalog.shows Catalog.catalog) durationMeta
 
         Library ->
-            viewGridScreen "LIBRARY" model.filter Catalog.catalog yearMeta
+            viewGridScreen "LIBRARY" model.filter model.search Catalog.catalog yearMeta
 
         Detail ->
             viewDetail (Catalog.find model.activeId)
@@ -158,8 +209,15 @@ viewScreen model =
 -- HEADER
 
 
-viewHeader : Screen -> Html Msg
-viewHeader screen =
+viewHeader : Screen -> String -> Html Msg
+viewHeader screen search =
+    let
+        showResults =
+            screen == Home && not (String.isEmpty search)
+
+        results =
+            Catalog.searchBy search Catalog.catalog
+    in
     div [ class "sticky-top flex items-center justify-between ph4 bb b--default bg-page", style "height" "64px" ]
         [ div [ class "flex items-center gap-6" ]
             [ div
@@ -178,9 +236,46 @@ viewHeader screen =
                 )
             ]
         , div [ class "flex items-center gap-5" ]
-            [ div [ class "f6 fg-muted tracked-wide" ] [ text "SEARCH$" ]
+            [ div [ class "relative" ]
+                [ input
+                    [ class "f6 tracked-wide"
+                    , style "width" "180px"
+                    , style "padding" "4px 8px"
+                    , Html.Attributes.placeholder "SEARCH$"
+                    , Html.Attributes.value search
+                    , onInput SetSearch
+                    ]
+                    []
+                , if showResults then
+                    viewSearchResults results
+
+                  else
+                    text ""
+                ]
             , div [ class "ba b--default bg-panel", style "width" "28px", style "height" "28px" ] []
             ]
+        ]
+
+
+viewSearchResults : List Title -> Html Msg
+viewSearchResults results =
+    if List.isEmpty results then
+        div [ class "search-dropdown pa3 f7 fg-muted tracked-wide" ] [ text "NO RESULTS" ]
+
+    else
+        div [ class "search-dropdown" ]
+            (List.map searchResultItem results)
+
+
+searchResultItem : Title -> Html Msg
+searchResultItem title =
+    div
+        [ class "pointer flex items-center gap-3 pa2"
+        , onClick (OpenDetail title.id)
+        ]
+        [ span [ class "fg-ghost b" ] [ text (Catalog.initial title) ]
+        , span [ class "f7 ttu tracked-wide fg-primary" ] [ text title.title ]
+        , span [ class "f7 fg-muted ml-auto" ] [ text (String.fromInt title.year) ]
         ]
 
 
@@ -350,13 +445,17 @@ durationMeta =
     .duration
 
 
-viewGridScreen : String -> Maybe Genre -> List Title -> (Title -> String) -> Html Msg
-viewGridScreen pageTitle filter titles meta =
+viewGridScreen : String -> Maybe Genre -> String -> List Title -> (Title -> String) -> Html Msg
+viewGridScreen pageTitle filter search titles meta =
+    let
+        results =
+            titles |> Catalog.byGenre filter |> Catalog.searchBy search
+    in
     div [ class "pa4" ]
         [ div [ class "text-xl ttu tracked-wide mb-5 fg-primary" ] [ text pageTitle ]
         , viewFilterChips filter
         , div [ class "grid-fill" ]
-            (List.map (gridCard meta) (Catalog.byGenre filter titles))
+            (List.map (gridCard meta) results)
         ]
 
 
@@ -470,7 +569,7 @@ viewDetail active =
 
 viewPlayer : Title -> Html Msg
 viewPlayer active =
-    div [ class "bg-page min-vh-100 flex flex-column" ]
+    div [ class "min-vh-100 flex flex-column" ]
         [ div [ class "flex items-center gap-4 pv3 ph4" ]
             [ div [ class "pointer f6 fg-secondary", onClick BackFromPlayer ] [ text "← BACK" ]
             , div [ class "f6 tracked-wide ttu" ] [ text active.title ]
@@ -669,5 +768,10 @@ main =
         { init = init
         , update = update
         , view = view
-        , subscriptions = \_ -> Sub.none
+        , subscriptions =
+            \_ ->
+                Sub.batch
+                    [ Browser.Events.onAnimationFrameDelta Tick
+                    , Browser.Events.onResize WindowResized
+                    ]
         }

@@ -11,7 +11,11 @@
   <div id="app"></div>
   <script src="elm.js"></script>
   <script>
-    Elm.Main.init({ node: document.getElementById("app") });
+    var app = Elm.Main.init({ node: document.getElementById("app") });
+    app.ports.scrollRow.subscribe(function(msg) {
+      var el = document.getElementById(msg.rowId);
+      if (el) el.scrollBy({ left: msg.delta, behavior: 'smooth' });
+    });
   </script>
 </body>
 </html>

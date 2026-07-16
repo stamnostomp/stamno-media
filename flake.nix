@@ -99,9 +99,8 @@
           program = toString (pkgs.writeShellScript "serve-stamno-media" ''
             set -e
             mkdir -p .dev
-            cp -f public/index.html public/stamno.css .dev/
-            cp -f ${tachyons pkgs} .dev/tachyons.min.css
-            chmod +w .dev/tachyons.min.css
+            ln -sf "$PWD"/public/index.html "$PWD"/public/stamno.css .dev/
+            ln -sf ${tachyons pkgs} .dev/tachyons.min.css
             exec ${pkgs.elmPackages.elm-live}/bin/elm-live src/Main.elm \
               --dir=.dev --host=127.0.0.1 --port=8000 \
               --path-to-elm=${pkgs.elmPackages.elm}/bin/elm \
