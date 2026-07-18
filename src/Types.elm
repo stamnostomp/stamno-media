@@ -1,0 +1,152 @@
+module Types exposing
+    ( Model
+    , Msg(..)
+    , NowPlaying(..)
+    , Screen(..)
+    , Tab(..)
+    , VideoState
+    , init
+    , initialVideoState
+    )
+
+import Api
+import Browser.Dom as Dom
+import Catalog exposing (Genre)
+import Dict exposing (Dict)
+import Http
+import Request
+import Task
+
+
+type Screen
+    = Home
+    | Movies
+    | Shows
+    | Library
+    | Detail
+    | RealDetail
+    | Player
+    | Requests
+
+
+type Tab
+    = Mine
+    | Discover
+
+
+{-| Which source the Player screen is showing: the styled demo player (no
+real file behind it) or a real file streamed from the media server.
+-}
+type NowPlaying
+    = DemoPlaying
+    | RealPlaying Api.Item
+
+
+{-| Mirrors the real `<video>` element's state, kept in sync via the
+'Ports.videoStatus' port.
+-}
+type alias VideoState =
+    { currentTime : Float
+    , duration : Float
+    , paused : Bool
+    , muted : Bool
+    , volume : Float
+    }
+
+
+{-| Assume paused until a real status event says otherwise: most browsers
+block unmuted `autoplay`, so starting from `paused = False` here would
+desync the play/pause button and icon from the actual (likely still
+paused) video until the first status event arrives.
+-}
+initialVideoState : VideoState
+initialVideoState =
+    { currentTime = 0, duration = 0, paused = True, muted = False, volume = 1 }
+
+
+type alias Model =
+    { screen : Screen
+    , activeId : Int
+    , filter : Maybe Genre
+    , search : String
+    , requestsTab : Tab
+    , requests : Dict Int Request.Entry
+    , time : Float
+    , resolution : { width : Float, height : Float }
+    , library : List Api.Item
+    , libraryError : Maybe String
+    , continueWatching : List Api.ContinueItem
+    , popular : List Api.Item
+    , newItems : List Api.Item
+    , nowPlaying : NowPlaying
+    , videoState : VideoState
+    , controlsVisible : Bool
+    , idleTime : Float
+    , resumeProgress : Maybe Int
+    , previousScreen : Screen
+    , activeRealItem : Maybe Api.Item
+    }
+
+
+init : () -> ( Model, Cmd Msg )
+init _ =
+    ( { screen = Home
+      , activeId = 1
+      , filter = Nothing
+      , search = ""
+      , requestsTab = Mine
+      , requests = Request.initialEntries
+      , time = 0
+      , resolution = { width = 1920, height = 1080 }
+      , library = []
+      , libraryError = Nothing
+      , continueWatching = []
+      , popular = []
+      , newItems = []
+      , nowPlaying = DemoPlaying
+      , videoState = initialVideoState
+      , controlsVisible = True
+      , idleTime = 0
+      , resumeProgress = Nothing
+      , previousScreen = Home
+      , activeRealItem = Nothing
+      }
+    , Cmd.batch
+        [ Task.perform GotViewport Dom.getViewport
+        , Api.fetchLibrary GotLibrary
+        , Api.fetchContinueWatching GotContinueWatching
+        , Api.fetchPopular GotPopular
+        , Api.fetchNew GotNew
+        ]
+    )
+
+
+type Msg
+    = NavigateTo Screen
+    | OpenDetail Int
+    | OpenPlayer
+    | OpenRealDetail Api.Item
+    | OpenRealPlayer Api.Item
+    | BackFromPlayer
+    | SetFilter (Maybe Genre)
+    | SetSearch String
+    | SetTab Tab
+    | RequestTitle Int
+    | ScrollRow String Float
+    | Tick Float
+    | GotViewport Dom.Viewport
+    | WindowResized Int Int
+    | GotLibrary (Result Http.Error (List Api.Item))
+    | GotContinueWatching (Result Http.Error (List Api.ContinueItem))
+    | GotPopular (Result Http.Error (List Api.Item))
+    | GotNew (Result Http.Error (List Api.Item))
+    | VideoTogglePlay
+    | VideoSeekTo Float
+    | VideoSkip Float
+    | VideoToggleMute
+    | VideoSetVolume Float
+    | VideoWheelVolume Float
+    | VideoFullscreen
+    | GotVideoStatus VideoState
+    | PlayerActivity
+    | NoOp
