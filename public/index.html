@@ -16,6 +16,56 @@
       var el = document.getElementById(msg.rowId);
       if (el) el.scrollBy({ left: msg.delta, behavior: 'smooth' });
     });
+
+    app.ports.videoCommand.subscribe(function(cmd) {
+      var v = document.getElementById('media-player');
+      if (!v) return;
+      switch (cmd.action) {
+        case 'play':
+          v.play();
+          break;
+        case 'pause':
+          v.pause();
+          break;
+        case 'seek':
+          v.currentTime = cmd.value;
+          break;
+        case 'skip':
+          v.currentTime = Math.max(0, v.currentTime + cmd.value);
+          break;
+        case 'mute':
+          v.muted = !v.muted;
+          break;
+        case 'volume':
+          v.volume = cmd.value;
+          if (cmd.value > 0) v.muted = false;
+          break;
+        case 'fullscreen':
+          var stage = document.getElementById('player-stage');
+          if (!stage) break;
+          if (document.fullscreenElement === stage) {
+            document.exitFullscreen();
+          } else if (stage.requestFullscreen) {
+            stage.requestFullscreen();
+          }
+          break;
+      }
+    });
+
+    function reportVideoStatus(event) {
+      var v = document.getElementById('media-player');
+      if (!v || event.target !== v) return;
+      app.ports.videoStatus.send({
+        currentTime: v.currentTime || 0,
+        duration: isFinite(v.duration) ? v.duration : 0,
+        paused: v.paused,
+        muted: v.muted,
+        volume: v.volume
+      });
+    }
+    ['timeupdate', 'loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
+      document.addEventListener(evt, reportVideoStatus, true);
+    });
   </script>
 </body>
 </html>

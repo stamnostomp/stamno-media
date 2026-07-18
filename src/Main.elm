@@ -1,13 +1,16 @@
 port module Main exposing (main)
 
+import Api
 import Browser
 import Browser.Dom as Dom
 import Browser.Events
 import Catalog exposing (Genre(..), MediaType(..), Title)
 import Dict exposing (Dict)
 import Html exposing (Html, button, div, input, span, text)
-import Html.Attributes exposing (class, height, id, style, width)
-import Html.Events exposing (onClick, onInput)
+import Html.Attributes as Attr exposing (autoplay, class, height, id, src, style, width)
+import Html.Events as Events exposing (onClick, onInput)
+import Http
+import Json.Decode as Decode
 import Math.Vector2 as Vec2
 import Request
 import Shaders.Background
@@ -21,6 +24,19 @@ import WebGL
 
 
 port scrollRow : { rowId : String, delta : Float } -> Cmd msg
+
+
+{-| Commands sent down to the JS side to drive the real `<video>` element
+(Elm has no built-in media-element bindings). `action` is one of "play",
+"pause", "seek", "skip", "mute", "volume", "fullscreen"; `value` carries
+the seek target / skip delta / volume level and is ignored otherwise.
+-}
+port videoCommand : { action : String, value : Float } -> Cmd msg
+
+
+{-| Status pushed up from the JS side on every timeupdate/play/pause/
+volumechange event of the real `<video>` element. -}
+port videoStatus : (VideoState -> msg) -> Sub msg
 
 
 
@@ -42,6 +58,34 @@ type Tab
     | Discover
 
 
+{-| Which source the Player screen is showing: the styled demo player (no
+real file behind it) or a real file streamed from the media server.
+-}
+type NowPlaying
+    = DemoPlaying
+    | RealPlaying Api.Item
+
+
+{-| Mirrors the real `<video>` element's state, kept in sync via the
+'videoStatus' port. -}
+type alias VideoState =
+    { currentTime : Float
+    , duration : Float
+    , paused : Bool
+    , muted : Bool
+    , volume : Float
+    }
+
+
+{-| Assume paused until a real 'videoStatus' event says otherwise: most
+browsers block unmuted `autoplay`, so starting from `paused = False` here
+would desync the play/pause button and icon from the actual (likely still
+paused) video until the first status event arrives. -}
+initialVideoState : VideoState
+initialVideoState =
+    { currentTime = 0, duration = 0, paused = True, muted = False, volume = 1 }
+
+
 type alias Model =
     { screen : Screen
     , activeId : Int
@@ -51,6 +95,12 @@ type alias Model =
     , requests : Dict Int Request.Entry
     , time : Float
     , resolution : { width : Float, height : Float }
+    , library : List Api.Item
+    , libraryError : Maybe String
+    , nowPlaying : NowPlaying
+    , videoState : VideoState
+    , controlsVisible : Bool
+    , idleTime : Float
     }
 
 
@@ -64,8 +114,17 @@ init _ =
       , requests = Request.initialEntries
       , time = 0
       , resolution = { width = 1920, height = 1080 }
+      , library = []
+      , libraryError = Nothing
+      , nowPlaying = DemoPlaying
+      , videoState = initialVideoState
+      , controlsVisible = True
+      , idleTime = 0
       }
-    , Task.perform GotViewport Dom.getViewport
+    , Cmd.batch
+        [ Task.perform GotViewport Dom.getViewport
+        , Api.fetchLibrary GotLibrary
+        ]
     )
 
 
@@ -77,6 +136,7 @@ type Msg
     = NavigateTo Screen
     | OpenDetail Int
     | OpenPlayer
+    | OpenRealPlayer Api.Item
     | BackFromPlayer
     | SetFilter (Maybe Genre)
     | SetSearch String
@@ -86,6 +146,16 @@ type Msg
     | Tick Float
     | GotViewport Dom.Viewport
     | WindowResized Int Int
+    | GotLibrary (Result Http.Error (List Api.Item))
+    | VideoTogglePlay
+    | VideoSeekTo Float
+    | VideoSkip Float
+    | VideoToggleMute
+    | VideoSetVolume Float
+    | VideoWheelVolume Float
+    | VideoFullscreen
+    | GotVideoStatus VideoState
+    | PlayerActivity
     | NoOp
 
 
@@ -99,10 +169,26 @@ update msg model =
             ( { model | screen = Detail, activeId = titleId }, Cmd.none )
 
         OpenPlayer ->
-            ( { model | screen = Player }, Cmd.none )
+            ( { model | screen = Player, nowPlaying = DemoPlaying }, Cmd.none )
+
+        OpenRealPlayer item ->
+            ( { model
+                | screen = Player
+                , nowPlaying = RealPlaying item
+                , videoState = initialVideoState
+                , controlsVisible = True
+                , idleTime = 0
+              }
+            , Cmd.none
+            )
 
         BackFromPlayer ->
-            ( { model | screen = Detail }, Cmd.none )
+            case model.nowPlaying of
+                RealPlaying _ ->
+                    ( { model | screen = Library }, videoCommand { action = "pause", value = 0 } )
+
+                DemoPlaying ->
+                    ( { model | screen = Detail }, Cmd.none )
 
         SetFilter filter ->
             ( { model | filter = filter }, Cmd.none )
@@ -120,7 +206,34 @@ update msg model =
             ( model, scrollRow { rowId = rowId, delta = delta } )
 
         Tick delta ->
-            ( { model | time = model.time + delta * 0.001 }, Cmd.none )
+            let
+                isPlayingVideo =
+                    model.screen == Player && not model.videoState.paused
+
+                newIdleTime =
+                    if isPlayingVideo then
+                        model.idleTime + delta
+
+                    else
+                        0
+
+                newControlsVisible =
+                    if not isPlayingVideo then
+                        True
+
+                    else if newIdleTime > idleHideThreshold then
+                        False
+
+                    else
+                        model.controlsVisible
+            in
+            ( { model
+                | time = model.time + delta * 0.001
+                , idleTime = newIdleTime
+                , controlsVisible = newControlsVisible
+              }
+            , Cmd.none
+            )
 
         GotViewport vp ->
             ( { model | resolution = { width = vp.viewport.width, height = vp.viewport.height } }
@@ -130,9 +243,81 @@ update msg model =
         WindowResized w h ->
             ( { model | resolution = { width = toFloat w, height = toFloat h } }, Cmd.none )
 
+        GotLibrary result ->
+            case result of
+                Ok items ->
+                    ( { model | library = items, libraryError = Nothing }, Cmd.none )
+
+                Err err ->
+                    ( { model | libraryError = Just (httpErrorToString err) }, Cmd.none )
+
+        VideoTogglePlay ->
+            ( model
+            , videoCommand
+                { action =
+                    if model.videoState.paused then
+                        "play"
+
+                    else
+                        "pause"
+                , value = 0
+                }
+            )
+
+        VideoSeekTo fraction ->
+            ( model, videoCommand { action = "seek", value = fraction * model.videoState.duration } )
+
+        VideoSkip delta ->
+            ( model, videoCommand { action = "skip", value = delta } )
+
+        VideoToggleMute ->
+            ( model, videoCommand { action = "mute", value = 0 } )
+
+        VideoSetVolume vol ->
+            ( model, videoCommand { action = "volume", value = clamp 0 1 vol } )
+
+        VideoWheelVolume delta ->
+            ( model
+            , videoCommand { action = "volume", value = clamp 0 1 (model.videoState.volume + delta) }
+            )
+
+        VideoFullscreen ->
+            ( model, videoCommand { action = "fullscreen", value = 0 } )
+
+        GotVideoStatus status ->
+            ( { model | videoState = status }, Cmd.none )
+
+        PlayerActivity ->
+            ( { model | idleTime = 0, controlsVisible = True }, Cmd.none )
+
         NoOp ->
             ( model, Cmd.none )
 
+
+{-| Milliseconds of no mouse activity, while playing, before the player
+controls fade out. -}
+idleHideThreshold : Float
+idleHideThreshold =
+    3000
+
+
+httpErrorToString : Http.Error -> String
+httpErrorToString err =
+    case err of
+        Http.BadUrl url ->
+            "bad url: " ++ url
+
+        Http.Timeout ->
+            "request timed out"
+
+        Http.NetworkError ->
+            "network error (is the media server running?)"
+
+        Http.BadStatus code ->
+            "server returned " ++ String.fromInt code
+
+        Http.BadBody body ->
+            "unexpected response: " ++ body
 
 
 
@@ -193,13 +378,13 @@ viewScreen model =
             viewGridScreen "Shows" model.filter model.search (Catalog.shows Catalog.catalog) durationMeta
 
         Library ->
-            viewGridScreen "LIBRARY" model.filter model.search Catalog.catalog yearMeta
+            viewLibraryScreen model
 
         Detail ->
             viewDetail (Catalog.find model.activeId)
 
         Player ->
-            viewPlayer (Catalog.find model.activeId)
+            viewPlayer model
 
         Requests ->
             viewRequests model
@@ -241,8 +426,8 @@ viewHeader screen search =
                     [ class "f6 tracked-wide"
                     , style "width" "180px"
                     , style "padding" "4px 8px"
-                    , Html.Attributes.placeholder "SEARCH$"
-                    , Html.Attributes.value search
+                    , Attr.placeholder "SEARCH$"
+                    , Attr.value search
                     , onInput SetSearch
                     ]
                     []
@@ -445,6 +630,90 @@ durationMeta =
     .duration
 
 
+{-| The real, API-backed library: whatever functonal-media-server finds
+under its configured media path. No genre/year/synopsis metadata exists
+for these files, so this is a plainer grid than the demo catalog's, and
+clicking a card streams the file directly rather than opening a Detail
+page.
+-}
+viewLibraryScreen : Model -> Html Msg
+viewLibraryScreen model =
+    let
+        results =
+            librarySearch model.search model.library
+    in
+    div [ class "pa4" ]
+        [ div [ class "text-xl ttu tracked-wide mb-5 fg-primary" ] [ text "LIBRARY" ]
+        , case model.libraryError of
+            Just err ->
+                div [ class "f6 fg-muted mb4" ] [ text ("Could not reach media server: " ++ err) ]
+
+            Nothing ->
+                text ""
+        , if List.isEmpty results then
+            div [ class "f6 fg-muted" ]
+                [ text
+                    (if model.libraryError /= Nothing then
+                        ""
+
+                     else
+                        "No media found."
+                    )
+                ]
+
+          else
+            div [ class "grid-fill" ] (List.map libraryCard results)
+        ]
+
+
+librarySearch : String -> List Api.Item -> List Api.Item
+librarySearch query items =
+    if String.isEmpty query then
+        items
+
+    else
+        let
+            lower =
+                String.toLower query
+        in
+        List.filter (\item -> String.contains lower (String.toLower item.title)) items
+
+
+libraryCard : Api.Item -> Html Msg
+libraryCard item =
+    div
+        [ class "poster relative pointer"
+        , style "height" "240px"
+        , onClick (OpenRealPlayer item)
+        ]
+        [ div
+            [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+            , style "font-size" "64px"
+            ]
+            [ text (String.left 1 item.title) ]
+        , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
+            [ div [ class "pa2 tr f7 fg-muted" ] [ text (formatBytes item.size) ]
+            , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ]
+            ]
+        ]
+
+
+formatBytes : Int -> String
+formatBytes bytes =
+    let
+        mb =
+            toFloat bytes / 1048576
+
+        roundTo1 x =
+            toFloat (round (x * 10)) / 10
+    in
+    if mb >= 1024 then
+        String.fromFloat (roundTo1 (mb / 1024)) ++ " GB"
+
+    else
+        String.fromFloat (roundTo1 mb) ++ " MB"
+
+
 viewGridScreen : String -> Maybe Genre -> String -> List Title -> (Title -> String) -> Html Msg
 viewGridScreen pageTitle filter search titles meta =
     let
@@ -567,8 +836,291 @@ viewDetail active =
 -- PLAYER
 
 
-viewPlayer : Title -> Html Msg
-viewPlayer active =
+viewPlayer : Model -> Html Msg
+viewPlayer model =
+    case model.nowPlaying of
+        RealPlaying item ->
+            viewRealPlayer item model.videoState model.controlsVisible
+
+        DemoPlaying ->
+            viewDemoPlayer (Catalog.find model.activeId)
+
+
+{-| Actual playback of a file streamed from the media server, via a
+`<video>` element hitting `GET /stream/:id` (byte-range requests and all).
+The video fills the whole viewport; the back link and control bar are
+absolutely-positioned overlays on top of it, each with a gradient behind
+them for legibility. Native controls are disabled; play/pause/seek/mute/
+fullscreen are driven through the 'videoCommand' port. The play/pause
+toggle lives on the `<video>` element itself (not an ancestor), so clicks
+on the header/control overlays don't also toggle playback.
+
+The whole stage (not just the `<video>`) is what goes fullscreen — see the
+'fullscreen' case in index.html's port glue — since the Fullscreen API only
+renders the fullscreened element's own descendants; fullscreening the video
+alone would drop these overlays entirely. Because show/hide of the overlays
+is driven by this same 'controlsVisible' state either way, behaviour is
+identical windowed or fullscreen.
+-}
+viewRealPlayer : Api.Item -> VideoState -> Bool -> Html Msg
+viewRealPlayer item videoState controlsVisible =
+    div
+        [ id "player-stage"
+        , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
+        , style "background" "black"
+        , Events.on "mousemove" (Decode.succeed PlayerActivity)
+        ]
+        [ Html.node "video"
+            [ id "media-player"
+            , autoplay True
+            , src (Api.streamUrl item.id)
+            , onClick VideoTogglePlay
+            , style "position" "absolute"
+            , style "top" "0"
+            , style "left" "0"
+            , style "width" "100%"
+            , style "height" "100%"
+            , style "object-fit" "contain"
+            ]
+            []
+        , if videoState.paused then
+            div
+                [ style "position" "absolute"
+                , style "top" "50%"
+                , style "left" "50%"
+                , style "transform" "translate(-50%, -50%)"
+                , style "width" "0"
+                , style "height" "0"
+                , style "border-top" "24px solid transparent"
+                , style "border-bottom" "24px solid transparent"
+                , style "border-left" "36px solid var(--white)"
+                , style "opacity" ".85"
+                , style "pointer-events" "none"
+                ]
+                []
+
+          else
+            text ""
+        , div
+            [ class "absolute top-0 left-0 w-100 flex items-center justify-between pv3 ph4"
+            , style "background" "linear-gradient(180deg, rgba(0,0,0,0.75), transparent)"
+            , style "opacity"
+                (if controlsVisible then
+                    "1"
+
+                 else
+                    "0"
+                )
+            , style "pointer-events"
+                (if controlsVisible then
+                    "auto"
+
+                 else
+                    "none"
+                )
+            , style "transition" "opacity 0.3s"
+            ]
+            [ div [ class "f6 tracked-wide ttu" ] [ text item.title ]
+            , div [ class "pointer f6 fg-secondary", onClick BackFromPlayer ] [ text "← BACK" ]
+            ]
+        , div
+            [ class "absolute bottom-0 left-0 w-100 ph-7 pv4 flex flex-column gap-3 fade-up-strong"
+            , style "opacity"
+                (if controlsVisible then
+                    "1"
+
+                 else
+                    "0"
+                )
+            , style "pointer-events"
+                (if controlsVisible then
+                    "auto"
+
+                 else
+                    "none"
+                )
+            , style "transition" "opacity 0.3s"
+            ]
+            [ videoSeekBar videoState
+            , div [ class "flex items-center justify-between" ]
+                [ div [ class "flex items-center gap-5 text-md" ]
+                    [ span [ class "pointer", onClick (VideoSkip -10) ] [ text "◄◄" ]
+                    , span
+                        [ class "pointer tc"
+                        , style "display" "inline-block"
+                        , style "width" "1.25em"
+                        , style "font-size" "1.75rem"
+                        , onClick VideoTogglePlay
+                        ]
+                        [ text
+                            (if videoState.paused then
+                                "▶"
+
+                             else
+                                "❚❚"
+                            )
+                        ]
+                    , span [ class "pointer", onClick (VideoSkip 10) ] [ text "►►" ]
+                    , span [ class "f7 fg-muted tracked-wide" ]
+                        [ text (formatTime videoState.currentTime ++ " / " ++ formatTime videoState.duration) ]
+                    ]
+                , div [ class "flex items-center gap-5 f6 fg-secondary" ]
+                    [ volControl videoState
+                    , span [ class "pointer" ] [ text "CC" ]
+                    , span [ class "pointer", onClick VideoFullscreen ] [ text "⛶" ]
+                    ]
+                ]
+            ]
+        ]
+
+
+{-| Clickable/scrubbable progress bar: click position (as a fraction of the
+bar's width) maps directly to a seek target. -}
+videoSeekBar : VideoState -> Html Msg
+videoSeekBar videoState =
+    let
+        pct =
+            if videoState.duration > 0 then
+                (videoState.currentTime / videoState.duration) * 100
+
+            else
+                0
+    in
+    div
+        [ class "relative w-100 pointer"
+        , style "height" "3px"
+        , style "background" "var(--gray-2)"
+        , onClickFraction VideoSeekTo
+        ]
+        [ div
+            [ class "absolute left-0 top-0 h-100"
+            , style "width" (String.fromFloat pct ++ "%")
+            , style "background" "var(--white)"
+            , style "pointer-events" "none"
+            ]
+            []
+        ]
+
+
+{-| The VOL/MUTED label plus a slider that pops up above it on hover
+(`.vol-control`/`.vol-slider` in stamno.css). The slider is a native range
+input, so click-to-set and drag both work for free; a wheel listener on
+the whole control adjusts volume in small steps without needing the
+popup open first. -}
+volControl : VideoState -> Html Msg
+volControl videoState =
+    div
+        [ class "vol-control relative pointer"
+        , Events.preventDefaultOn "wheel" wheelVolumeDecoder
+        ]
+        [ span [ onClick VideoToggleMute ]
+            [ text
+                (if videoState.muted then
+                    "MUTED"
+
+                 else
+                    "VOL"
+                )
+            ]
+        , div [ class "vol-slider absolute" ]
+            [ input
+                [ Attr.type_ "range"
+                , Attr.min "0"
+                , Attr.max "1"
+                , Attr.step "0.01"
+                , Attr.value
+                    (String.fromFloat
+                        (if videoState.muted then
+                            0
+
+                         else
+                            videoState.volume
+                        )
+                    )
+                , onRangeInput VideoSetVolume
+                ]
+                []
+            ]
+        ]
+
+
+wheelVolumeDecoder : Decode.Decoder ( Msg, Bool )
+wheelVolumeDecoder =
+    Decode.field "deltaY" Decode.float
+        |> Decode.map
+            (\dy ->
+                ( VideoWheelVolume
+                    (if dy > 0 then
+                        -0.05
+
+                     else
+                        0.05
+                    )
+                , True
+                )
+            )
+
+
+onRangeInput : (Float -> Msg) -> Html.Attribute Msg
+onRangeInput toMsg =
+    Events.on "input"
+        (Events.targetValue
+            |> Decode.andThen
+                (\str ->
+                    case String.toFloat str of
+                        Just v ->
+                            Decode.succeed (toMsg v)
+
+                        Nothing ->
+                            Decode.fail "not a float"
+                )
+        )
+
+
+{-| Maps a click's horizontal position within the element to a 0..1
+fraction of the element's width, e.g. for scrubbing a progress bar.
+
+The fill overlay inside the bar has `pointer-events: none` so that
+`event.target` here is always the bar itself, never the overlay — otherwise
+a click landing on the (already-played) filled portion would compute its
+offset and width against the overlay's own box instead of the full bar.
+-}
+onClickFraction : (Float -> Msg) -> Html.Attribute Msg
+onClickFraction toMsg =
+    Events.on "click"
+        (Decode.map2 (\x w -> toMsg (clamp 0 1 (x / w)))
+            (Decode.field "offsetX" Decode.float)
+            (Decode.at [ "target", "clientWidth" ] Decode.float)
+        )
+
+
+formatTime : Float -> String
+formatTime seconds =
+    if isNaN seconds || isInfinite seconds || seconds < 0 then
+        "00:00:00"
+
+    else
+        let
+            total =
+                floor seconds
+
+            h =
+                total // 3600
+
+            m =
+                modBy 60 (total // 60)
+
+            s =
+                modBy 60 total
+
+            pad n =
+                String.padLeft 2 '0' (String.fromInt n)
+        in
+        pad h ++ ":" ++ pad m ++ ":" ++ pad s
+
+
+viewDemoPlayer : Title -> Html Msg
+viewDemoPlayer active =
     div [ class "min-vh-100 flex flex-column" ]
         [ div [ class "flex items-center gap-4 pv3 ph4" ]
             [ div [ class "pointer f6 fg-secondary", onClick BackFromPlayer ] [ text "← BACK" ]
@@ -773,5 +1325,6 @@ main =
                 Sub.batch
                     [ Browser.Events.onAnimationFrameDelta Tick
                     , Browser.Events.onResize WindowResized
+                    , videoStatus GotVideoStatus
                     ]
         }
