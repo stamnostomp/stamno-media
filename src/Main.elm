@@ -7,8 +7,8 @@ import Browser.Events
 import Catalog exposing (Genre(..), MediaType(..), Title)
 import Dict exposing (Dict)
 import Html exposing (Html, button, div, input, span, text)
-import Html.Attributes as Attr exposing (autoplay, class, height, id, src, style, width)
-import Html.Events as Events exposing (onClick, onInput)
+import Html.Attributes exposing (autoplay, class, height, id, src, style, width)
+import Html.Events exposing (onClick, onInput)
 import Http
 import Json.Decode as Decode
 import Math.Vector2 as Vec2
@@ -49,6 +49,7 @@ type Screen
     | Shows
     | Library
     | Detail
+    | RealDetail
     | Player
     | Requests
 
@@ -97,10 +98,16 @@ type alias Model =
     , resolution : { width : Float, height : Float }
     , library : List Api.Item
     , libraryError : Maybe String
+    , continueWatching : List Api.ContinueItem
+    , popular : List Api.Item
+    , newItems : List Api.Item
     , nowPlaying : NowPlaying
     , videoState : VideoState
     , controlsVisible : Bool
     , idleTime : Float
+    , resumeProgress : Maybe Int
+    , previousScreen : Screen
+    , activeRealItem : Maybe Api.Item
     }
 
 
@@ -116,14 +123,23 @@ init _ =
       , resolution = { width = 1920, height = 1080 }
       , library = []
       , libraryError = Nothing
+      , continueWatching = []
+      , popular = []
+      , newItems = []
       , nowPlaying = DemoPlaying
       , videoState = initialVideoState
       , controlsVisible = True
       , idleTime = 0
+      , resumeProgress = Nothing
+      , previousScreen = Home
+      , activeRealItem = Nothing
       }
     , Cmd.batch
         [ Task.perform GotViewport Dom.getViewport
         , Api.fetchLibrary GotLibrary
+        , Api.fetchContinueWatching GotContinueWatching
+        , Api.fetchPopular GotPopular
+        , Api.fetchNew GotNew
         ]
     )
 
@@ -136,6 +152,7 @@ type Msg
     = NavigateTo Screen
     | OpenDetail Int
     | OpenPlayer
+    | OpenRealDetail Api.Item
     | OpenRealPlayer Api.Item
     | BackFromPlayer
     | SetFilter (Maybe Genre)
@@ -147,6 +164,9 @@ type Msg
     | GotViewport Dom.Viewport
     | WindowResized Int Int
     | GotLibrary (Result Http.Error (List Api.Item))
+    | GotContinueWatching (Result Http.Error (List Api.ContinueItem))
+    | GotPopular (Result Http.Error (List Api.Item))
+    | GotNew (Result Http.Error (List Api.Item))
     | VideoTogglePlay
     | VideoSeekTo Float
     | VideoSkip Float
@@ -169,7 +189,14 @@ update msg model =
             ( { model | screen = Detail, activeId = titleId }, Cmd.none )
 
         OpenPlayer ->
-            ( { model | screen = Player, nowPlaying = DemoPlaying }, Cmd.none )
+            ( { model | screen = Player, nowPlaying = DemoPlaying, previousScreen = model.screen }
+            , Cmd.none
+            )
+
+        OpenRealDetail item ->
+            ( { model | screen = RealDetail, activeRealItem = Just item, previousScreen = model.screen }
+            , Cmd.none
+            )
 
         OpenRealPlayer item ->
             ( { model
@@ -178,17 +205,29 @@ update msg model =
                 , videoState = initialVideoState
                 , controlsVisible = True
                 , idleTime = 0
+                , previousScreen = model.screen
+                , resumeProgress =
+                    model.continueWatching
+                        |> List.filter (\c -> c.id == item.id)
+                        |> List.head
+                        |> Maybe.map .progress
               }
             , Cmd.none
             )
 
         BackFromPlayer ->
             case model.nowPlaying of
-                RealPlaying _ ->
-                    ( { model | screen = Library }, videoCommand { action = "pause", value = 0 } )
+                RealPlaying item ->
+                    ( { model
+                        | screen = model.previousScreen
+                        , continueWatching =
+                            upsertContinueWatching item model.videoState model.continueWatching
+                      }
+                    , videoCommand { action = "pause", value = 0 }
+                    )
 
                 DemoPlaying ->
-                    ( { model | screen = Detail }, Cmd.none )
+                    ( { model | screen = model.previousScreen }, Cmd.none )
 
         SetFilter filter ->
             ( { model | filter = filter }, Cmd.none )
@@ -251,6 +290,17 @@ update msg model =
                 Err err ->
                     ( { model | libraryError = Just (httpErrorToString err) }, Cmd.none )
 
+        GotContinueWatching result ->
+            ( { model | continueWatching = Result.withDefault model.continueWatching result }
+            , Cmd.none
+            )
+
+        GotPopular result ->
+            ( { model | popular = Result.withDefault model.popular result }, Cmd.none )
+
+        GotNew result ->
+            ( { model | newItems = Result.withDefault model.newItems result }, Cmd.none )
+
         VideoTogglePlay ->
             ( model
             , videoCommand
@@ -295,10 +345,40 @@ update msg model =
 
 
 {-| Milliseconds of no mouse activity, while playing, before the player
-controls fade out. -}
+controls fade out. Matches "same behaviour" in and out of real fullscreen,
+since fullscreening the whole stage (see 'viewRealPlayer') keeps this Elm
+state and its view driving the overlay either way. -}
 idleHideThreshold : Float
 idleHideThreshold =
     3000
+
+
+{-| Updates the local continue-watching list from the video's own current
+state, instead of waiting on a round trip to the server. Without this, a
+fresh seek right before leaving the player wouldn't be reflected until
+the next `/continuewatching` fetch (which doesn't happen again on its
+own), so re-opening the same item would silently resume from the old,
+stale position. -}
+upsertContinueWatching : Api.Item -> VideoState -> List Api.ContinueItem -> List Api.ContinueItem
+upsertContinueWatching item videoState existing =
+    let
+        withoutItem =
+            List.filter (\c -> c.id /= item.id) existing
+    in
+    if videoState.duration <= 0 then
+        existing
+
+    else
+        let
+            percent =
+                round (100 * videoState.currentTime / videoState.duration)
+        in
+        if percent > 2 && percent < 95 then
+            { id = item.id, title = item.title, size = item.size, mime = item.mime, progress = percent }
+                :: withoutItem
+
+        else
+            withoutItem
 
 
 httpErrorToString : Http.Error -> String
@@ -318,6 +398,7 @@ httpErrorToString err =
 
         Http.BadBody body ->
             "unexpected response: " ++ body
+
 
 
 
@@ -372,16 +453,19 @@ viewScreen model =
             viewHome model
 
         Movies ->
-            viewGridScreen "Movies" model.filter model.search (Catalog.movies Catalog.catalog) yearMeta
+            viewLibraryScreen "MOVIES" model
 
         Shows ->
             viewGridScreen "Shows" model.filter model.search (Catalog.shows Catalog.catalog) durationMeta
 
         Library ->
-            viewLibraryScreen model
+            viewLibraryScreen "LIBRARY" model
 
         Detail ->
             viewDetail (Catalog.find model.activeId)
+
+        RealDetail ->
+            viewRealDetail model
 
         Player ->
             viewPlayer model
@@ -426,8 +510,8 @@ viewHeader screen search =
                     [ class "f6 tracked-wide"
                     , style "width" "180px"
                     , style "padding" "4px 8px"
-                    , Attr.placeholder "SEARCH$"
-                    , Attr.value search
+                    , Html.Attributes.placeholder "SEARCH$"
+                    , Html.Attributes.value search
                     , onInput SetSearch
                     ]
                     []
@@ -487,21 +571,26 @@ navLink current ( label, target ) =
 
 viewHome : Model -> Html Msg
 viewHome model =
-    let
-        active =
-            Catalog.find model.activeId
-
-        withRow slice =
-            slice Catalog.catalog
-    in
     div []
-        [ viewHero active
+        [ viewHero (Catalog.find model.activeId)
         , div [ class "ph4 pt4 pb5 flex flex-column gap-7" ]
-            [ viewRow "Continue Watching" "row-continue" continueCard (List.take 9 Catalog.catalog)
-            , viewRow "Trending Now" "row-trending" rowCard (withRow (List.drop 3 >> List.take 10))
-            , viewRow "Recently Added" "row-recent" rowCard (withRow (List.drop 6 >> List.take 10))
+            [ viewMaybeRow "Continue Watching" "row-continue" continueWatchingCard model.continueWatching
+            , viewMaybeRow "Trending Now" "row-trending" libraryCard model.popular
+            , viewMaybeRow "Recently Added" "row-recent" libraryCard model.newItems
             ]
         ]
+
+
+{-| Omits the row entirely (rather than showing an empty scroller) when
+the server has nothing for it yet, e.g. "Continue Watching" before
+anything has been played. -}
+viewMaybeRow : String -> String -> (a -> Html Msg) -> List a -> Html Msg
+viewMaybeRow label rowId card items =
+    if List.isEmpty items then
+        text ""
+
+    else
+        viewRow label rowId card items
 
 
 viewHero : Title -> Html Msg
@@ -532,7 +621,7 @@ viewHero active =
         ]
 
 
-viewRow : String -> String -> (Title -> Html Msg) -> List Title -> Html Msg
+viewRow : String -> String -> (a -> Html Msg) -> List a -> Html Msg
 viewRow label rowId card titles =
     div []
         [ div [ class "flex items-center justify-between mb3" ]
@@ -564,38 +653,30 @@ cardTitle title =
     div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text title.title ]
 
 
-{-| 160x240 row card: year top-right and title fade in on hover. -}
-rowCard : Title -> Html Msg
-rowCard title =
+{-| Continue Watching card, real-data version: hover title plus an
+always-visible progress bar reflecting the server-reported watch percent. -}
+continueWatchingCard : Api.ContinueItem -> Html Msg
+continueWatchingCard item =
     div
         [ class "poster relative pointer flex-none"
         , style "width" "160px"
         , style "height" "240px"
-        , onClick (OpenDetail title.id)
+        , onClick
+            (OpenRealDetail
+                { id = item.id, title = item.title, size = item.size, mime = item.mime }
+            )
         ]
-        [ monogram "64px" title
-        , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
-            [ div [ class "pa2 tr f7 fg-muted" ] [ text (String.fromInt title.year) ]
-            , cardTitle title
+        [ div
+            [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+            , style "font-size" "64px"
             ]
-        ]
-
-
-{-| Continue Watching card: hover title plus an always-visible progress bar. -}
-continueCard : Title -> Html Msg
-continueCard title =
-    div
-        [ class "poster relative pointer flex-none"
-        , style "width" "160px"
-        , style "height" "240px"
-        , onClick (OpenDetail title.id)
-        ]
-        [ monogram "64px" title
-        , div [ class "reveal absolute absolute--fill flex items-end" ] [ cardTitle title ]
+            [ text (String.left 1 item.title) ]
+        , div [ class "reveal absolute absolute--fill flex items-end" ]
+            [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ] ]
         , div
             [ class "absolute left-0 bottom-0"
             , style "height" "3px"
-            , style "width" (String.fromInt title.progress ++ "%")
+            , style "width" (String.fromInt item.progress ++ "%")
             , style "background" "var(--gray-5)"
             ]
             []
@@ -620,11 +701,6 @@ relatedCard title =
 -- MOVIES / SHOWS / LIBRARY
 
 
-yearMeta : Title -> String
-yearMeta title =
-    String.fromInt title.year
-
-
 durationMeta : Title -> String
 durationMeta =
     .duration
@@ -633,17 +709,16 @@ durationMeta =
 {-| The real, API-backed library: whatever functonal-media-server finds
 under its configured media path. No genre/year/synopsis metadata exists
 for these files, so this is a plainer grid than the demo catalog's, and
-clicking a card streams the file directly rather than opening a Detail
-page.
+clicking a card opens its detail page rather than streaming directly.
 -}
-viewLibraryScreen : Model -> Html Msg
-viewLibraryScreen model =
+viewLibraryScreen : String -> Model -> Html Msg
+viewLibraryScreen pageTitle model =
     let
         results =
             librarySearch model.search model.library
     in
     div [ class "pa4" ]
-        [ div [ class "text-xl ttu tracked-wide mb-5 fg-primary" ] [ text "LIBRARY" ]
+        [ div [ class "text-xl ttu tracked-wide mb-5 fg-primary" ] [ text pageTitle ]
         , case model.libraryError of
             Just err ->
                 div [ class "f6 fg-muted mb4" ] [ text ("Could not reach media server: " ++ err) ]
@@ -684,7 +759,7 @@ libraryCard item =
     div
         [ class "poster relative pointer"
         , style "height" "240px"
-        , onClick (OpenRealPlayer item)
+        , onClick (OpenRealDetail item)
         ]
         [ div
             [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
@@ -695,6 +770,27 @@ libraryCard item =
             [ div [ class "pa2 tr f7 fg-muted" ] [ text (formatBytes item.size) ]
             , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ]
             ]
+        ]
+
+
+{-| Fixed-width variant of 'libraryCard' for a horizontal row-scroll
+(e.g. "More From Your Library"), same as how 'relatedCard' differs from
+the grid cards for the demo catalog. -}
+libraryRowCard : Api.Item -> Html Msg
+libraryRowCard item =
+    div
+        [ class "poster relative pointer flex-none"
+        , style "width" "160px"
+        , style "height" "240px"
+        , onClick (OpenRealDetail item)
+        ]
+        [ div
+            [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+            , style "font-size" "64px"
+            ]
+            [ text (String.left 1 item.title) ]
+        , div [ class "reveal absolute absolute--fill flex items-end" ]
+            [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ] ]
         ]
 
 
@@ -712,6 +808,7 @@ formatBytes bytes =
 
     else
         String.fromFloat (roundTo1 mb) ++ " MB"
+
 
 
 viewGridScreen : String -> Maybe Genre -> String -> List Title -> (Title -> String) -> Html Msg
@@ -832,6 +929,111 @@ viewDetail active =
         ]
 
 
+{-| Detail page for a real, API-backed item, matching the demo catalog's
+`viewDetail` layout (backdrop banner, overlapping poster/info panel,
+description line, "More From Your Library" row) with fields that actually
+exist for a real file substituted for genre/cast/synopsis. -}
+viewRealDetail : Model -> Html Msg
+viewRealDetail model =
+    case model.activeRealItem of
+        Nothing ->
+            text ""
+
+        Just item ->
+            let
+                maybeProgress =
+                    model.continueWatching
+                        |> List.filter (\c -> c.id == item.id)
+                        |> List.head
+                        |> Maybe.map .progress
+            in
+            div []
+                [ div
+                    [ class "pointer pv3 ph4 f6 fg-secondary tracked-wide"
+                    , onClick (NavigateTo model.previousScreen)
+                    ]
+                    [ text "← BACK" ]
+                , div [ class "relative z-0 backdrop-bg bb b--default", style "height" "340px" ] []
+                , div
+                    [ class "relative z-1 flex gap-6 ph4"
+                    , style "margin-top" "-120px"
+                    ]
+                    [ div
+                        [ class "relative ba b--strong bg-panel flex-none flex items-center justify-center fg-ghost b"
+                        , style "width" "200px"
+                        , style "height" "300px"
+                        , style "font-size" "96px"
+                        ]
+                        [ text (String.left 1 item.title) ]
+                    , div
+                        [ class "flex-auto flex flex-column gap-4"
+                        , style "padding-top" "130px"
+                        , style "max-width" "700px"
+                        ]
+                        [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text item.title ]
+                        , div [ class "flex items-center gap-3 f6 fg-secondary" ]
+                            [ span [] [ text (formatBytes item.size) ]
+                            , span [] [ text "·" ]
+                            , span [] [ text item.mime ]
+                            ]
+                        , div [ class "f5 fg-secondary lh-copy" ]
+                            [ text
+                                (item.title
+                                    ++ " is a "
+                                    ++ item.mime
+                                    ++ " file ("
+                                    ++ formatBytes item.size
+                                    ++ ") from your media library."
+                                )
+                            ]
+                        , case maybeProgress of
+                            Just percent ->
+                                div [ class "flex flex-column gap-2", style "max-width" "300px" ]
+                                    [ div [ class "f7 fg-muted" ] [ text (String.fromInt percent ++ "% watched") ]
+                                    , div
+                                        [ class "relative w-100"
+                                        , style "height" "3px"
+                                        , style "background" "var(--gray-2)"
+                                        ]
+                                        [ div
+                                            [ class "absolute left-0 top-0 h-100"
+                                            , style "width" (String.fromInt percent ++ "%")
+                                            , style "background" "var(--white)"
+                                            ]
+                                            []
+                                        ]
+                                    ]
+
+                            Nothing ->
+                                text ""
+                        , div [ class "flex gap-4 mt2" ]
+                            [ button
+                                [ class "btn btn-primary"
+                                , onClick (OpenRealPlayer item)
+                                ]
+                                [ text
+                                    (if maybeProgress /= Nothing then
+                                        "▶ Resume"
+
+                                     else
+                                        "▶ Play"
+                                    )
+                                ]
+                            ]
+                        ]
+                    ]
+                , div [ class "ph4 pv5" ]
+                    [ div [ class "f6 tracked-wider ttu fg-secondary mb3" ] [ text "More From Your Library" ]
+                    , div [ class "row-scroll flex gap-4" ]
+                        (model.library
+                            |> List.filter (\i -> i.id /= item.id)
+                            |> List.take 10
+                            |> List.map libraryRowCard
+                        )
+                    ]
+                ]
+
+
 
 -- PLAYER
 
@@ -840,7 +1042,7 @@ viewPlayer : Model -> Html Msg
 viewPlayer model =
     case model.nowPlaying of
         RealPlaying item ->
-            viewRealPlayer item model.videoState model.controlsVisible
+            viewRealPlayer item model.videoState model.controlsVisible model.resumeProgress
 
         DemoPlaying ->
             viewDemoPlayer (Catalog.find model.activeId)
@@ -861,17 +1063,25 @@ renders the fullscreened element's own descendants; fullscreening the video
 alone would drop these overlays entirely. Because show/hide of the overlays
 is driven by this same 'controlsVisible' state either way, behaviour is
 identical windowed or fullscreen.
+
+If 'maybeResumeProgress' is set (the item appears in continue-watching),
+the video carries a `data-resume-percent` attribute that index.html's JS
+reads once, on `loadedmetadata`, to seek to that position before playback
+is visible to the user.
 -}
-viewRealPlayer : Api.Item -> VideoState -> Bool -> Html Msg
-viewRealPlayer item videoState controlsVisible =
+viewRealPlayer : Api.Item -> VideoState -> Bool -> Maybe Int -> Html Msg
+viewRealPlayer item videoState controlsVisible maybeResumeProgress =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
         , style "background" "black"
-        , Events.on "mousemove" (Decode.succeed PlayerActivity)
+        , Html.Events.on "mousemove" (Decode.succeed PlayerActivity)
         ]
         [ Html.node "video"
             [ id "media-player"
+            , Html.Attributes.attribute "data-item-id" item.id
+            , Html.Attributes.attribute "data-resume-percent"
+                (maybeResumeProgress |> Maybe.map String.fromInt |> Maybe.withDefault "")
             , autoplay True
             , src (Api.streamUrl item.id)
             , onClick VideoTogglePlay
@@ -1011,7 +1221,7 @@ volControl : VideoState -> Html Msg
 volControl videoState =
     div
         [ class "vol-control relative pointer"
-        , Events.preventDefaultOn "wheel" wheelVolumeDecoder
+        , Html.Events.preventDefaultOn "wheel" wheelVolumeDecoder
         ]
         [ span [ onClick VideoToggleMute ]
             [ text
@@ -1024,11 +1234,11 @@ volControl videoState =
             ]
         , div [ class "vol-slider absolute" ]
             [ input
-                [ Attr.type_ "range"
-                , Attr.min "0"
-                , Attr.max "1"
-                , Attr.step "0.01"
-                , Attr.value
+                [ Html.Attributes.type_ "range"
+                , Html.Attributes.min "0"
+                , Html.Attributes.max "1"
+                , Html.Attributes.step "0.01"
+                , Html.Attributes.value
                     (String.fromFloat
                         (if videoState.muted then
                             0
@@ -1063,8 +1273,8 @@ wheelVolumeDecoder =
 
 onRangeInput : (Float -> Msg) -> Html.Attribute Msg
 onRangeInput toMsg =
-    Events.on "input"
-        (Events.targetValue
+    Html.Events.on "input"
+        (Html.Events.targetValue
             |> Decode.andThen
                 (\str ->
                     case String.toFloat str of
@@ -1087,7 +1297,7 @@ offset and width against the overlay's own box instead of the full bar.
 -}
 onClickFraction : (Float -> Msg) -> Html.Attribute Msg
 onClickFraction toMsg =
-    Events.on "click"
+    Html.Events.on "click"
         (Decode.map2 (\x w -> toMsg (clamp 0 1 (x / w)))
             (Decode.field "offsetX" Decode.float)
             (Decode.at [ "target", "clientWidth" ] Decode.float)

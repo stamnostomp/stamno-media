@@ -52,9 +52,9 @@
       }
     });
 
-    function reportVideoStatus(event) {
+    function reportVideoStatus() {
       var v = document.getElementById('media-player');
-      if (!v || event.target !== v) return;
+      if (!v) return;
       app.ports.videoStatus.send({
         currentTime: v.currentTime || 0,
         duration: isFinite(v.duration) ? v.duration : 0,
@@ -63,9 +63,61 @@
         volume: v.volume
       });
     }
-    ['timeupdate', 'loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
-      document.addEventListener(evt, reportVideoStatus, true);
+    ['loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
+      document.addEventListener(evt, function(event) {
+        if (event.target && event.target.id === 'media-player') reportVideoStatus();
+      }, true);
     });
+
+    // 'timeupdate' alone is too coarse for a smooth seek bar/clock (browsers
+    // throttle it to roughly every 250ms-1s). Poll on a tighter interval
+    // instead, while actually playing.
+    setInterval(function() {
+      var v = document.getElementById('media-player');
+      if (v && !v.paused) reportVideoStatus();
+    }, 100);
+
+    // Resumes from the last reported position, once, when a fresh video
+    // element's metadata becomes available (before the user sees it start
+    // from 0). The attribute is cleared immediately after so later
+    // metadata events (if any) don't repeatedly override manual seeking.
+    document.addEventListener('loadedmetadata', function(event) {
+      var v = event.target;
+      if (!v || v.id !== 'media-player') return;
+      var resumePercent = v.dataset.resumePercent;
+      if (resumePercent && isFinite(v.duration)) {
+        v.currentTime = v.duration * (parseFloat(resumePercent) / 100);
+      }
+      delete v.dataset.resumePercent;
+    }, true);
+
+    // Periodically reports playback position to the server so it can
+    // compute "continue watching". Fire-and-forget, independent of Elm.
+    var API_BASE = 'http://localhost:8080';
+
+    function sendProgress() {
+      var v = document.getElementById('media-player');
+      if (!v || !v.duration || !isFinite(v.duration)) return;
+      var itemId = v.dataset.itemId;
+      if (!itemId) return;
+      fetch(API_BASE + '/progress', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: itemId, currentTime: v.currentTime, duration: v.duration })
+      }).catch(function() {});
+    }
+
+    setInterval(function() {
+      var v = document.getElementById('media-player');
+      if (v && !v.paused) sendProgress();
+    }, 5000);
+
+    document.addEventListener('pause', function(event) {
+      if (event.target && event.target.id === 'media-player') sendProgress();
+    }, true);
+    document.addEventListener('ended', function(event) {
+      if (event.target && event.target.id === 'media-player') sendProgress();
+    }, true);
   </script>
 </body>
 </html>
