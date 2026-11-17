@@ -1,7 +1,7 @@
 module Pages.Home exposing (view)
 
 import Catalog exposing (Title)
-import Components exposing (continueWatchingCard, libraryCard)
+import Components exposing (continueWatchingCard, libraryRowCard)
 import Html exposing (Html, button, div, span, text)
 import Html.Attributes exposing (class, id, style)
 import Html.Events exposing (onClick)
@@ -14,8 +14,8 @@ view model =
         [ viewHero (Catalog.find model.activeId)
         , div [ class "ph4 pt4 pb5 flex flex-column gap-7" ]
             [ viewMaybeRow "Continue Watching" "row-continue" continueWatchingCard model.continueWatching
-            , viewMaybeRow "Trending Now" "row-trending" libraryCard model.popular
-            , viewMaybeRow "Recently Added" "row-recent" libraryCard model.newItems
+            , viewMaybeRow "Trending Now" "row-trending" libraryRowCard model.popular
+            , viewMaybeRow "Recently Added" "row-recent" libraryRowCard model.newItems
             ]
         ]
 
