@@ -14,7 +14,7 @@ view model =
     case model.nowPlaying of
         RealPlaying item ->
             -- m32: pass the token so the <video src> can carry api_key=
-            viewReal item model.token model.videoState model.controlsVisible model.resumeProgress
+            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress
 
         DemoPlaying ->
             viewDemo model.activeId
@@ -41,8 +41,8 @@ the video carries a `data-resume-percent` attribute that index.html's JS
 reads once, on `loadedmetadata`, to seek to that position before playback
 is visible to the user.
 -}
-viewReal : Api.Item -> Maybe String -> VideoState -> Bool -> Maybe Int -> Html Msg
-viewReal item token videoState controlsVisible maybeResumeProgress =
+viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> Html Msg
+viewReal item token playSrc videoState controlsVisible maybeResumeProgress =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
@@ -55,7 +55,7 @@ viewReal item token videoState controlsVisible maybeResumeProgress =
             , Attr.attribute "data-resume-percent"
                 (maybeResumeProgress |> Maybe.map String.fromInt |> Maybe.withDefault "")
             , autoplay True
-            , src (Api.streamUrl token item.id)
+            , src (Maybe.withDefault (Api.streamUrl token item.id) playSrc)
             , onClick VideoTogglePlay
             , style "position" "absolute"
             , style "top" "0"
@@ -74,7 +74,16 @@ viewReal item token videoState controlsVisible maybeResumeProgress =
             , style "transition" "opacity 0.3s"
             ]
             [ div [ class "f6 tracked-wide ttu" ] [ text item.title ]
-            , div [ class "pointer f6 fg-secondary", onClick BackFromPlayer ] [ text "← BACK" ]
+            , div [ class "flex items-center gap-3" ]
+                [ -- m33: TRANSCODING badge when the server told us to transcode
+                  case playSrc of
+                    Just _ ->
+                        div [ class "ba b--default f7 tracked-wide ttu fg-muted", style "padding" "2px 8px" ] [ text "TRANSCODING" ]
+
+                    Nothing ->
+                        text ""
+                , div [ class "pointer f6 fg-secondary", onClick BackFromPlayer ] [ text "← BACK" ]
+                ]
             ]
         , div
             [ class "absolute bottom-0 left-0 w-100 ph-7 pv4 flex flex-column gap-3 fade-up-strong"

@@ -44,6 +44,7 @@ update msg model =
             ( { model
                 | screen = Player
                 , nowPlaying = RealPlaying item
+                , playSrc = Nothing
                 , videoState = initialVideoState
                 , controlsVisible = True
                 , idleTime = 0
@@ -54,8 +55,27 @@ update msg model =
                         |> List.head
                         |> Maybe.map .progress
               }
-            , Cmd.none
+              -- m33: ask PlaybackInfo whether to direct-play or transcode
+            , Api.fetchPlaybackInfo model.token item.id GotPlaybackInfo
             )
+
+        GotPlaybackInfo result ->
+            case result of
+                Ok pi ->
+                    -- m33: Transcode -> use the TranscodingUrl (with api_key);
+                    -- DirectPlay -> playSrc stays Nothing (plain /stream/:id)
+                    let
+                        src =
+                            if pi.playMethod == "Transcode" then
+                                Maybe.map (Api.transcodingSrc model.token Api.baseUrl) pi.transcodingUrl
+
+                            else
+                                Nothing
+                    in
+                    ( { model | playSrc = src }, Cmd.none )
+
+                Err _ ->
+                    ( { model | playSrc = Nothing }, Cmd.none )
 
         BackFromPlayer ->
             case model.nowPlaying of

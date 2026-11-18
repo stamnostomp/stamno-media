@@ -93,6 +93,7 @@ type alias Model =
     , popular : List Api.Item
     , newItems : List Api.Item
     , nowPlaying : NowPlaying
+    , playSrc : Maybe String
     , videoState : VideoState
     , controlsVisible : Bool
     , idleTime : Float
@@ -133,6 +134,7 @@ init _ =
       , popular = []
       , newItems = []
       , nowPlaying = DemoPlaying
+      , playSrc = Nothing
       , videoState = initialVideoState
       , controlsVisible = True
       , idleTime = 0
@@ -165,6 +167,7 @@ type Msg
     | OpenPlayer
     | OpenRealDetail Api.Item
     | OpenRealPlayer Api.Item
+    | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | BackFromPlayer
     | SetFilter (Maybe Genre)
     | SetSearch String

@@ -1,9 +1,11 @@
 module Api exposing
     ( AuthResult
+    , baseUrl
     , ContinueItem
     , CreateRequestPayload
     , DiscoverItem
     , Item
+    , PlaybackInfo
     , Release
     , RequestEntry
     , Tracker
@@ -16,12 +18,14 @@ module Api exposing
     , fetchDiscoverPopular
     , fetchLibrary
     , fetchNew
+    , fetchPlaybackInfo
     , fetchPopular
     , fetchRequests
     , fetchTrackers
     , searchIndexers
     , searchReleases
     , streamUrl
+    , transcodingSrc
     )
 
 {-| Client for the functonal-media-server HTTP API. Progress reporting
@@ -180,6 +184,59 @@ fetchNew token toMsg =
         , timeout = Nothing
         , tracker = Nothing
         }
+
+
+{-| POST /Items/:id/PlaybackInfo response (m33): PlayMethod
+("DirectPlay" | "Transcode") and an optional server-relative
+TranscodingUrl. -}
+type alias PlaybackInfo =
+    { playMethod : String
+    , transcodingUrl : Maybe String
+    }
+
+
+playbackInfoDecoder : Decoder PlaybackInfo
+playbackInfoDecoder =
+    Decode.map2 PlaybackInfo
+        (Decode.field "PlayMethod" Decode.string)
+        (Decode.maybe (Decode.field "TranscodingUrl" Decode.string))
+
+
+{-| m33: POST /Items/:id/PlaybackInfo (empty JSON body, auth header) so the
+player can pick DirectPlay (/stream/:id) vs Transcode (TranscodingUrl). -}
+fetchPlaybackInfo : Maybe String -> String -> (Result Http.Error PlaybackInfo -> msg) -> Cmd msg
+fetchPlaybackInfo token itemId toMsg =
+    Http.request
+        { method = "POST"
+        , headers = authHeader token ++ [ Http.header "Content-Type" "application/json" ]
+        , url = baseUrl ++ "/Items/" ++ itemId ++ "/PlaybackInfo"
+        , body = Http.jsonBody (Encode.object [])
+        , expect = Http.expectJson toMsg playbackInfoDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m33: absolute media URL for a server-relative path (e.g. a
+TranscodingUrl), carrying the token as api_key (? or & depending on
+whether the path already has a query). -}
+transcodingSrc : Maybe String -> String -> String -> String
+transcodingSrc token base path =
+    base
+        ++ path
+        ++ (case token of
+                Just t ->
+                    (if String.contains "?" path then
+                        "&api_key="
+
+                     else
+                        "?api_key="
+                    )
+                        ++ Url.percentEncode t
+
+                Nothing ->
+                    ""
+           )
 
 
 {-| m32: stream URL with the token as a Jellyfin-style api_key query param,
