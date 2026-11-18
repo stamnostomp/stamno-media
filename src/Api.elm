@@ -7,6 +7,8 @@ module Api exposing
     , Release
     , RequestEntry
     , Tracker
+    , releaseDecoder
+    , searchResultsDecoder
     , authHeader
     , createRequest
     , fetchAuth
@@ -236,7 +238,8 @@ trackerDecoder =
         (Decode.field "Enabled" Decode.bool)
 
 
-{-| One Torznab release from GET /Trackers/:id/Search. -}
+{-| One Torznab release from GET /Indexers/Search (m21/m26, field IndexerId)
+or the legacy GET /Trackers/:id/Search (field TrackerId). -}
 type alias Release =
     { title : String
     , sizeBytes : Maybe Int
@@ -255,7 +258,21 @@ releaseDecoder =
         (Decode.maybe (Decode.field "Seeders" Decode.int))
         (Decode.maybe (Decode.field "DownloadUrl" Decode.string))
         (Decode.maybe (Decode.field "Magnet" Decode.string))
-        (Decode.field "TrackerId" Decode.string)
+        -- m28: /Indexers/Search results carry IndexerId, legacy tracker
+        -- search carries TrackerId -- accept either
+        (Decode.oneOf
+            [ Decode.field "IndexerId" Decode.string
+            , Decode.field "TrackerId" Decode.string
+            ]
+        )
+
+
+{-| m28: the /Indexers/Search response is an ENVELOPE
+`{"Results": [...], "Errors": {...}}`, not a bare array; the Errors object
+is ignored here. -}
+searchResultsDecoder : Decoder (List Release)
+searchResultsDecoder =
+    Decode.field "Results" (Decode.list releaseDecoder)
 
 
 {-| Body of POST /Requests: Title is required, everything else optional. -}
@@ -462,9 +479,9 @@ fetchDiscoverPopular token toMsg =
         }
 
 
-{-| GET /Indexers/Search?q=..&type=movie[&indexerId=..] (m26): with
+{-| GET /Indexers/Search?q=..&type=movie[&indexerId=..] (m26/m28): with
 `Nothing` the server searches ALL enabled indexers; with `Just` only
-that one. -}
+that one. The response is the {Results, Errors} envelope (m28). -}
 searchIndexers : Maybe String -> Maybe String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
 searchIndexers token mIndexerId query toMsg =
     let
@@ -484,7 +501,7 @@ searchIndexers token mIndexerId query toMsg =
         , headers = authHeader token
         , url = baseUrl ++ url
         , body = Http.emptyBody
-        , expect = Http.expectJson toMsg (Decode.list releaseDecoder)
+        , expect = Http.expectJson toMsg searchResultsDecoder
         , timeout = Nothing
         , tracker = Nothing
         }

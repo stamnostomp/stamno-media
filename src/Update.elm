@@ -180,7 +180,14 @@ update msg model =
                             model.reqQuery
                     , year = Nothing
                     , mediaType = Just "movie"
-                    , trackerId = model.activeTracker
+                    , trackerId =
+                        -- m28: prefer the release's own IndexerId (works when
+                        -- ALL TRACKERS is selected); fall back to the picker
+                        if String.isEmpty rel.trackerId then
+                            model.activeTracker
+
+                        else
+                            Just rel.trackerId
                     , release = Just rel.title
                     , sizeBytes = rel.sizeBytes
                     , magnet = rel.magnet
