@@ -1,6 +1,7 @@
 module Pages.RealDetail exposing (view)
 
-import Components exposing (formatBytes, libraryRowCard)
+import Api
+import Components exposing (formatBytes, libraryRowCard, posterImage)
 import Html exposing (Html, button, div, span, text)
 import Html.Attributes exposing (class, style)
 import Html.Events exposing (onClick)
@@ -27,37 +28,75 @@ view model =
                     , onClick (NavigateTo model.previousScreen)
                     ]
                     [ text "← BACK" ]
-                , div [ class "relative z-0 backdrop-bg bb b--default", style "height" "340px" ] []
+                , div
+                    [ class "relative z-0 backdrop-bg bb b--default"
+                    , style "height" "340px"
+                    , style "background-image" ("url(" ++ Api.imageUrl model.token item.id "Backdrop" ++ ")")
+                    , style "background-size" "cover"
+                    , style "background-position" "center"
+                    ]
+                    []
                 , div
                     [ class "relative z-1 flex gap-6 ph4"
                     , style "margin-top" "-120px"
                     ]
                     [ div
-                        [ class "relative ba b--strong bg-panel flex-none flex items-center justify-center fg-ghost b"
+                        [ class "relative ba b--strong bg-panel flex-none flex items-center justify-center fg-ghost b overflow-hidden"
                         , style "width" "200px"
                         , style "height" "300px"
                         , style "font-size" "96px"
                         ]
-                        [ text (String.left 1 item.title) ]
+                        [ text (String.left 1 item.title)
+                        , posterImage model.token item.id
+                        ]
                     , div
                         [ class "flex-auto flex flex-column gap-4"
                         , style "padding-top" "130px"
                         , style "max-width" "700px"
                         ]
-                        [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text item.title ]
-                        , div [ class "flex items-center gap-3 f6 fg-secondary" ]
-                            [ span [] [ text (formatBytes item.size) ]
-                            , span [] [ text "·" ]
-                            , span [] [ text item.mime ]
-                            ]
+                        [ div [ class "f1 ttu b tracked-wide fg-primary" ]
+                            [ text (Maybe.withDefault item.title (metaField model .title)) ]
+                        , div [ class "flex items-center gap-3 f6 fg-secondary flex-wrap" ]
+                            ([ span [] [ text (formatBytes item.size) ]
+                             , span [] [ text "·" ]
+                             , span [] [ text item.mime ]
+                             ]
+                                ++ (case metaField model .year of
+                                        Just y ->
+                                            [ span [] [ text "·" ], span [] [ text (String.fromInt y) ] ]
+
+                                        Nothing ->
+                                            []
+                                   )
+                                ++ (case metaField model .rating of
+                                        Just r ->
+                                            [ span [] [ text "·" ], span [] [ text ("RATING " ++ String.fromFloat r) ] ]
+
+                                        Nothing ->
+                                            []
+                                   )
+                               )
+                        , div [ class "flex items-center gap-2 flex-wrap" ]
+                            (case model.itemMeta of
+                                Just m ->
+                                    List.map (\g -> span [ class "ba b--default f7 ttu tracked-wide fg-muted pa1" ] [ text g ]) m.genres
+
+                                Nothing ->
+                                    []
+                            )
                         , div [ class "f5 fg-secondary lh-copy" ]
                             [ text
-                                (item.title
-                                    ++ " is a "
-                                    ++ item.mime
-                                    ++ " file ("
-                                    ++ formatBytes item.size
-                                    ++ ") from your media library."
+                                (case model.itemMeta of
+                                    Just m ->
+                                        case m.overview of
+                                            Just o ->
+                                                o
+
+                                            Nothing ->
+                                                fallbackDesc item
+
+                                    Nothing ->
+                                        fallbackDesc item
                                 )
                             ]
                         , viewProgress maybeProgress
@@ -83,10 +122,30 @@ view model =
                         (model.library
                             |> List.filter (\i -> i.id /= item.id)
                             |> List.take 10
-                            |> List.map libraryRowCard
+                            |> List.map (libraryRowCard model.token)
                         )
                     ]
                 ]
+
+
+metaField : Model -> (Api.ItemMetadata -> Maybe a) -> Maybe a
+metaField m f =
+    case m.itemMeta of
+        Just meta ->
+            f meta
+
+        Nothing ->
+            Nothing
+
+
+fallbackDesc : Api.Item -> String
+fallbackDesc it =
+    it.title
+        ++ " is a "
+        ++ it.mime
+        ++ " file ("
+        ++ formatBytes it.size
+        ++ ") from your media library."
 
 
 viewProgress : Maybe Int -> Html Msg

@@ -5,14 +5,27 @@ module Components exposing
     , libraryCard
     , libraryRowCard
     , monogram
+    , posterImage
     )
 
 import Api
 import Catalog exposing (Title)
-import Html exposing (Html, div, text)
-import Html.Attributes exposing (class, style)
+import Html exposing (Html, div, img, text)
+import Html.Attributes exposing (class, src, style)
 import Html.Events exposing (onClick)
 import Types exposing (Msg(..))
+
+
+{-| m34: server poster artwork layered ON TOP of the letter placeholder
+(if the image 404s the monogram still shows through). -}
+posterImage : Maybe String -> String -> Html Msg
+posterImage token id =
+    img
+        [ class "absolute absolute--fill w-100 h-100"
+        , style "object-fit" "cover"
+        , src (Api.imageUrl token id "Primary")
+        ]
+        []
 
 
 monogram : String -> Title -> Html Msg
@@ -45,8 +58,8 @@ formatBytes bytes =
         String.fromFloat (roundTo1 mb) ++ " MB"
 
 
-libraryCard : Api.Item -> Html Msg
-libraryCard item =
+libraryCard : Maybe String -> Api.Item -> Html Msg
+libraryCard token item =
     div
         [ class "poster relative pointer"
         , style "height" "240px"
@@ -57,6 +70,7 @@ libraryCard item =
             , style "font-size" "64px"
             ]
             [ text (String.left 1 item.title) ]
+        , posterImage token item.id
         , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
             [ div [ class "pa2 tr f7 fg-muted" ] [ text (formatBytes item.size) ]
             , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ]
@@ -65,8 +79,8 @@ libraryCard item =
 
 
 {-| Fixed-width variant of 'libraryCard' for horizontal row-scrolls. -}
-libraryRowCard : Api.Item -> Html Msg
-libraryRowCard item =
+libraryRowCard : Maybe String -> Api.Item -> Html Msg
+libraryRowCard token item =
     div
         [ class "poster relative pointer flex-none"
         , style "width" "160px"
@@ -78,13 +92,14 @@ libraryRowCard item =
             , style "font-size" "64px"
             ]
             [ text (String.left 1 item.title) ]
+        , posterImage token item.id
         , div [ class "reveal absolute absolute--fill flex items-end" ]
             [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ] ]
         ]
 
 
-continueWatchingCard : Api.ContinueItem -> Html Msg
-continueWatchingCard item =
+continueWatchingCard : Maybe String -> Api.ContinueItem -> Html Msg
+continueWatchingCard token item =
     div
         [ class "poster relative pointer flex-none"
         , style "width" "160px"
@@ -99,6 +114,7 @@ continueWatchingCard item =
             , style "font-size" "64px"
             ]
             [ text (String.left 1 item.title) ]
+        , posterImage token item.id
         , div [ class "reveal absolute absolute--fill flex items-end" ]
             [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.title ] ]
         , div

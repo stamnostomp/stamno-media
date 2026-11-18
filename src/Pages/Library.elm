@@ -33,7 +33,7 @@ view pageTitle model =
                 ]
 
           else
-            div [ class "grid-fill" ] (List.map libraryCard results)
+            div [ class "grid-fill" ] (List.map (libraryCard model.token) results)
         ]
 
 

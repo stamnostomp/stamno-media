@@ -13,9 +13,9 @@ view model =
     div []
         [ viewHero (Catalog.find model.activeId)
         , div [ class "ph4 pt4 pb5 flex flex-column gap-7" ]
-            [ viewMaybeRow "Continue Watching" "row-continue" continueWatchingCard model.continueWatching
-            , viewMaybeRow "Trending Now" "row-trending" libraryRowCard model.popular
-            , viewMaybeRow "Recently Added" "row-recent" libraryRowCard model.newItems
+            [ viewMaybeRow "Continue Watching" "row-continue" (continueWatchingCard model.token) model.continueWatching
+            , viewMaybeRow "Trending Now" "row-trending" (libraryRowCard model.token) model.popular
+            , viewMaybeRow "Recently Added" "row-recent" (libraryRowCard model.token) model.newItems
             ]
         ]
 

@@ -5,6 +5,7 @@ module ApiDecodeTests exposing (suite)
 TrackerId shape from /Trackers/:id/Search. -}
 
 import Api
+import Debug
 import Expect
 import Json.Decode as Decode
 import Test exposing (Test, describe, test)
@@ -58,4 +59,47 @@ suite =
                 Decode.decodeString Api.releaseDecoder """{"Title":"NoId"}"""
                     |> Result.toMaybe
                     |> Expect.equal Nothing
+              , test "m34 itemMetadataDecoder: full metadata object (lowercase keys)" <|
+            \_ ->
+                case Decode.decodeString Api.itemMetadataDecoder
+                    """{"title":"Shrek","overview":"An ogre.","year":2001,"rating":8.1,"genres":["Animation","Comedy"],"providerIds":{"Tmdb":808}}""" of
+                    Ok m ->
+                        Expect.all
+                            [ \x -> Expect.equal x.title (Just "Shrek")
+                            , \x -> Expect.equal x.overview (Just "An ogre.")
+                            , \x -> Expect.equal x.year (Just 2001)
+                            , \x -> Expect.equal x.rating (Just 8.1)
+                            , \x -> Expect.equal x.genres [ "Animation", "Comedy" ]
+                            ]
+                            m
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m34 itemMetadataDecoder: missing fields tolerated, envelope Metadata null -> Nothing" <|
+            \_ ->
+                case Decode.decodeString Api.itemMetadataDecoder """{"title":"Only Title"}""" of
+                    Ok m ->
+                        Expect.all
+                            [ \_ -> Expect.equal m.title (Just "Only Title")
+                            , \_ -> Expect.equal m.genres []
+                            , \_ -> Expect.equal m.rating Nothing
+                            ]
+                            ()
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m34 metadata envelope: Metadata null decodes to the empty record (fetch default)" <|
+            \_ ->
+                case Decode.decodeString
+                    (Decode.maybe (Decode.field "Metadata" Api.itemMetadataDecoder))
+                    """{"Id":"1","Name":"x","Metadata":null}""" of
+                    Ok (Just m) ->
+                        Expect.all
+                            [ \_ -> Expect.equal m.title Nothing
+                            , \_ -> Expect.equal m.genres []
+                            ]
+                            ()
+
+                    other ->
+                        Expect.fail ("unexpected: " ++ Debug.toString other)
         ]

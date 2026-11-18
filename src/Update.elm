@@ -36,9 +36,18 @@ update msg model =
             )
 
         OpenRealDetail item ->
-            ( { model | screen = RealDetail, activeRealItem = Just item, previousScreen = model.screen }
-            , Cmd.none
+            ( { model | screen = RealDetail, activeRealItem = Just item, itemMeta = Nothing, previousScreen = model.screen }
+              -- m34: fetch the stored TMDB metadata for the detail page
+            , Api.fetchItemMetadata model.token item.id GotItemMetadata
             )
+
+        GotItemMetadata result ->
+            case result of
+                Ok meta ->
+                    ( { model | itemMeta = Just meta }, Cmd.none )
+
+                Err _ ->
+                    ( { model | itemMeta = Nothing }, Cmd.none )
 
         OpenRealPlayer item ->
             ( { model

@@ -100,6 +100,7 @@ type alias Model =
     , resumeProgress : Maybe Int
     , previousScreen : Screen
     , activeRealItem : Maybe Api.Item
+    , itemMeta : Maybe Api.ItemMetadata
     , userMenuOpen : Bool
     , token : Maybe String
     , authUser : Maybe AuthUser
@@ -141,6 +142,7 @@ init _ =
       , resumeProgress = Nothing
       , previousScreen = Home
       , activeRealItem = Nothing
+      , itemMeta = Nothing
       , userMenuOpen = False
       , token = Nothing
       , authUser = Nothing
@@ -166,6 +168,7 @@ type Msg
     | OpenDetail Int
     | OpenPlayer
     | OpenRealDetail Api.Item
+    | GotItemMetadata (Result Http.Error Api.ItemMetadata)
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | BackFromPlayer

@@ -5,6 +5,7 @@ module Api exposing
     , CreateRequestPayload
     , DiscoverItem
     , Item
+    , ItemMetadata
     , PlaybackInfo
     , Release
     , RequestEntry
@@ -17,11 +18,14 @@ module Api exposing
     , fetchContinueWatching
     , fetchDiscoverPopular
     , fetchLibrary
+    , fetchItemMetadata
     , fetchNew
     , fetchPlaybackInfo
     , fetchPopular
     , fetchRequests
     , fetchTrackers
+    , imageUrl
+    , itemMetadataDecoder
     , searchIndexers
     , searchReleases
     , streamUrl
@@ -181,6 +185,70 @@ fetchNew token toMsg =
         , url = baseUrl ++ "/new"
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list itemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m34: artwork URL for an item: /Items/:id/Images/<kind>?api_key=<token>
+(kind = Primary | Backdrop | ...). Token appended when present (the image
+route is auth-gated in strict mode and <img> cannot carry headers). -}
+imageUrl : Maybe String -> String -> String -> String
+imageUrl token id kind =
+    baseUrl
+        ++ "/Items/"
+        ++ id
+        ++ "/Images/"
+        ++ kind
+        ++ (case token of
+                Just t ->
+                    "?api_key=" ++ Url.percentEncode t
+
+                Nothing ->
+                    ""
+           )
+
+
+{-| m34: the TMDB metadata object stored server-side
+(GET /Items/:id/metadata -> {"Metadata": {...}}; lowercase keys).
+All fields optional so partial/legacy metadata still decodes. -}
+type alias ItemMetadata =
+    { title : Maybe String
+    , overview : Maybe String
+    , year : Maybe Int
+    , rating : Maybe Float
+    , genres : List String
+    }
+
+
+emptyItemMetadata : ItemMetadata
+emptyItemMetadata =
+    ItemMetadata Nothing Nothing Nothing Nothing []
+
+
+itemMetadataDecoder : Decoder ItemMetadata
+itemMetadataDecoder =
+    Decode.map5 ItemMetadata
+        (Decode.maybe (Decode.field "title" Decode.string))
+        (Decode.maybe (Decode.field "overview" Decode.string))
+        (Decode.maybe (Decode.field "year" Decode.int))
+        (Decode.maybe (Decode.field "rating" Decode.float))
+        (Decode.field "genres" (Decode.list Decode.string) |> Decode.maybe |> Decode.map (Maybe.withDefault []))
+
+
+{-| m34: GET /Items/:id/metadata -> the Metadata object (null -> empty). -}
+fetchItemMetadata : Maybe String -> String -> (Result Http.Error ItemMetadata -> msg) -> Cmd msg
+fetchItemMetadata token itemId toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Items/" ++ itemId ++ "/metadata"
+        , body = Http.emptyBody
+        , expect =
+            Http.expectJson toMsg
+                (Decode.map (Maybe.withDefault emptyItemMetadata)
+                    (Decode.maybe (Decode.field "Metadata" itemMetadataDecoder))
+                )
         , timeout = Nothing
         , tracker = Nothing
         }
