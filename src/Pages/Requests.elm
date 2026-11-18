@@ -100,6 +100,7 @@ viewRequestRow r =
                             , String.slice 0 10 r.createdAt
                             , sizeText r.sizeBytes
                             , Maybe.withDefault "" r.sourceRelease
+                            , Maybe.withDefault "" r.downloadDir
                             ]
                         )
                     )
