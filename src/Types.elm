@@ -1,5 +1,6 @@
 module Types exposing
-    ( Model
+    ( AuthUser
+    , Model
     , Msg(..)
     , NowPlaying(..)
     , Screen(..)
@@ -64,6 +65,13 @@ initialVideoState =
     { currentTime = 0, duration = 0, paused = True, muted = False, volume = 1 }
 
 
+{-| The logged-in user, from the `User` object of the auth response. -}
+type alias AuthUser =
+    { name : String
+    , isAdmin : Bool
+    }
+
+
 type alias Model =
     { screen : Screen
     , activeId : Int
@@ -86,6 +94,12 @@ type alias Model =
     , previousScreen : Screen
     , activeRealItem : Maybe Api.Item
     , userMenuOpen : Bool
+    , token : Maybe String
+    , authUser : Maybe AuthUser
+    , needsAuth : Bool
+    , loginUser : String
+    , loginPass : String
+    , loginError : Maybe String
     }
 
 
@@ -112,13 +126,19 @@ init _ =
       , previousScreen = Home
       , activeRealItem = Nothing
       , userMenuOpen = False
+      , token = Nothing
+      , authUser = Nothing
+      , needsAuth = False
+      , loginUser = ""
+      , loginPass = ""
+      , loginError = Nothing
       }
     , Cmd.batch
         [ Task.perform GotViewport Dom.getViewport
-        , Api.fetchLibrary GotLibrary
-        , Api.fetchContinueWatching GotContinueWatching
-        , Api.fetchPopular GotPopular
-        , Api.fetchNew GotNew
+        , Api.fetchLibrary Nothing GotLibrary
+        , Api.fetchContinueWatching Nothing GotContinueWatching
+        , Api.fetchPopular Nothing GotPopular
+        , Api.fetchNew Nothing GotNew
         ]
     )
 
@@ -153,4 +173,11 @@ type Msg
     | PlayerActivity
     | ToggleUserMenu
     | CloseUserMenu
+    | GotStoredToken String
+    | SetLoginUser String
+    | SetLoginPass String
+    | SubmitLogin
+    | GotAuth (Result Http.Error Api.AuthResult)
+    | SignOut
+    | GotUnauthorized
     | NoOp

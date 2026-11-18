@@ -1,4 +1,4 @@
-port module Ports exposing (scrollRow, videoCommand, videoStatus)
+port module Ports exposing (scrollRow, storeToken, tokenStored, videoCommand, videoStatus)
 
 
 port scrollRow : { rowId : String, delta : Float } -> Cmd msg
@@ -16,3 +16,12 @@ port videoCommand : { action : String, value : Float } -> Cmd msg
 volumechange event of the real `<video>` element.
 -}
 port videoStatus : ({ currentTime : Float, duration : Float, paused : Bool, muted : Bool, volume : Float } -> msg) -> Sub msg
+
+
+{-| Persist (or clear, on empty string) the auth token in localStorage. -}
+port storeToken : String -> Cmd msg
+
+
+{-| Push the token stored in localStorage at page load (empty string when
+none) so Elm can resume an existing session. -}
+port tokenStored : (String -> msg) -> Sub msg

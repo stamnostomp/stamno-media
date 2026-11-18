@@ -127,21 +127,101 @@ update msg model =
         GotLibrary result ->
             case result of
                 Ok items ->
-                    ( { model | library = items, libraryError = Nothing }, Cmd.none )
+                    ( { model | library = items, libraryError = Nothing, needsAuth = False }, Cmd.none )
 
                 Err err ->
-                    ( { model | libraryError = Just (httpErrorToString err) }, Cmd.none )
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | libraryError = Just (httpErrorToString err) }, Cmd.none )
 
         GotContinueWatching result ->
-            ( { model | continueWatching = Result.withDefault model.continueWatching result }
-            , Cmd.none
-            )
+            case result of
+                Ok items ->
+                    ( { model | continueWatching = items, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
 
         GotPopular result ->
-            ( { model | popular = Result.withDefault model.popular result }, Cmd.none )
+            case result of
+                Ok items ->
+                    ( { model | popular = items, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
 
         GotNew result ->
-            ( { model | newItems = Result.withDefault model.newItems result }, Cmd.none )
+            case result of
+                Ok items ->
+                    ( { model | newItems = items, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+        GotStoredToken stored ->
+            if String.isEmpty stored then
+                ( model, Cmd.none )
+
+            else
+                ( { model | token = Just stored }, fetchAll (Just stored) )
+
+        SetLoginUser v ->
+            ( { model | loginUser = v }, Cmd.none )
+
+        SetLoginPass v ->
+            ( { model | loginPass = v }, Cmd.none )
+
+        SubmitLogin ->
+            ( { model | loginError = Nothing }, Api.fetchAuth model.loginUser model.loginPass GotAuth )
+
+        GotAuth result ->
+            case result of
+                Ok r ->
+                    ( { model
+                        | token = Just r.token
+                        , authUser = Just { name = r.userName, isAdmin = r.isAdmin }
+                        , needsAuth = False
+                        , loginError = Nothing
+                        , loginPass = ""
+                      }
+                    , Cmd.batch [ Ports.storeToken r.token, fetchAll (Just r.token) ]
+                    )
+
+                Err err ->
+                    ( { model | loginError = Just (if isUnauthorized err then "INVALID CREDENTIALS" else "SERVER UNREACHABLE") }
+                    , Cmd.none
+                    )
+
+        SignOut ->
+            ( { model
+                | token = Nothing
+                , authUser = Nothing
+                , needsAuth = True
+                , loginError = Nothing
+                , library = []
+                , continueWatching = []
+                , popular = []
+                , newItems = []
+              }
+            , Ports.storeToken ""
+            )
+
+        GotUnauthorized ->
+            ( { model | needsAuth = True }, Cmd.none )
 
         VideoTogglePlay ->
             ( model
@@ -224,6 +304,29 @@ upsertContinueWatching item videoState existing =
 
         else
             withoutItem
+
+
+{-| True when the server rejected the request for a missing/invalid token
+(status 401): the UI then switches to the login screen. -}
+isUnauthorized : Http.Error -> Bool
+isUnauthorized err =
+    case err of
+        Http.BadStatus code ->
+            code == 401
+
+        _ ->
+            False
+
+
+{-| Re-fetch every data feed with the given token. -}
+fetchAll : Maybe String -> Cmd Msg
+fetchAll token =
+    Cmd.batch
+        [ Api.fetchLibrary token GotLibrary
+        , Api.fetchContinueWatching token GotContinueWatching
+        , Api.fetchPopular token GotPopular
+        , Api.fetchNew token GotNew
+        ]
 
 
 httpErrorToString : Http.Error -> String

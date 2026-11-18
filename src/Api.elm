@@ -1,6 +1,9 @@
 module Api exposing
-    ( ContinueItem
+    ( AuthResult
+    , ContinueItem
     , Item
+    , authHeader
+    , fetchAuth
     , fetchContinueWatching
     , fetchLibrary
     , fetchNew
@@ -14,6 +17,7 @@ through Elm, so there's no Elm-side function for it. -}
 
 import Http
 import Json.Decode as Decode exposing (Decoder)
+import Json.Encode as Encode
 
 
 baseUrl : String
@@ -59,35 +63,108 @@ continueItemDecoder =
         (Decode.field "progress" Decode.int)
 
 
-fetchLibrary : (Result Http.Error (List Item) -> msg) -> Cmd msg
-fetchLibrary toMsg =
-    Http.get
-        { url = baseUrl ++ "/library"
-        , expect = Http.expectJson toMsg (Decode.list itemDecoder)
+{-| The auth token returned by POST /Users/AuthenticateByName, plus the
+logged-in user's name and admin flag (from the `User` object). -}
+type alias AuthResult =
+    { token : String
+    , userName : String
+    , isAdmin : Bool
+    }
+
+
+authResultDecoder : Decoder AuthResult
+authResultDecoder =
+    Decode.map3 AuthResult
+        (Decode.field "AccessToken" Decode.string)
+        (Decode.oneOf
+            [ Decode.field "User" (Decode.field "Name" Decode.string)
+            , Decode.field "User" (Decode.field "name" Decode.string)
+            ]
+        )
+        (Decode.oneOf
+            [ Decode.field "User" (Decode.field "IsAdministrator" Decode.bool)
+            , Decode.field "User" (Decode.field "isAdministrator" Decode.bool)
+            ]
+        )
+
+
+{-| Header sent on every authenticated request (Jellyfin/Emby style).
+`Nothing` (open mode / logged out) sends no header.
+-}
+authHeader : Maybe String -> List Http.Header
+authHeader token =
+    case token of
+        Just t ->
+            [ Http.header "X-Emby-Token" t ]
+
+        Nothing ->
+            []
+
+
+fetchAuth : String -> String -> (Result Http.Error AuthResult -> msg) -> Cmd msg
+fetchAuth user pass toMsg =
+    Http.post
+        { url = baseUrl ++ "/Users/AuthenticateByName"
+        , body =
+            Http.jsonBody
+                (Encode.object
+                    [ ( "Username", Encode.string user )
+                    , ( "Pw", Encode.string pass )
+                    ]
+                )
+        , expect = Http.expectJson toMsg authResultDecoder
         }
 
 
-fetchContinueWatching : (Result Http.Error (List ContinueItem) -> msg) -> Cmd msg
-fetchContinueWatching toMsg =
-    Http.get
-        { url = baseUrl ++ "/continuewatching"
+fetchLibrary : Maybe String -> (Result Http.Error (List Item) -> msg) -> Cmd msg
+fetchLibrary token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/library"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list itemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+fetchContinueWatching : Maybe String -> (Result Http.Error (List ContinueItem) -> msg) -> Cmd msg
+fetchContinueWatching token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/continuewatching"
+        , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list continueItemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
-fetchPopular : (Result Http.Error (List Item) -> msg) -> Cmd msg
-fetchPopular toMsg =
-    Http.get
-        { url = baseUrl ++ "/popular"
+fetchPopular : Maybe String -> (Result Http.Error (List Item) -> msg) -> Cmd msg
+fetchPopular token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/popular"
+        , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list itemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 
-fetchNew : (Result Http.Error (List Item) -> msg) -> Cmd msg
-fetchNew toMsg =
-    Http.get
-        { url = baseUrl ++ "/new"
+fetchNew : Maybe String -> (Result Http.Error (List Item) -> msg) -> Cmd msg
+fetchNew token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/new"
+        , body = Http.emptyBody
         , expect = Http.expectJson toMsg (Decode.list itemDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
         }
 
 

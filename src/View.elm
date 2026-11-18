@@ -2,8 +2,8 @@ module View exposing (view)
 
 import Browser
 import Catalog exposing (Title)
-import Html exposing (Html, a, div, input, span, text)
-import Html.Attributes exposing (class, height, href, style, width)
+import Html exposing (Html, a, button, div, input, span, text)
+import Html.Attributes exposing (class, height, href, placeholder, style, type_, value, width)
 import Html.Events exposing (onClick, onInput)
 import Math.Vector2 as Vec2
 import Pages.Detail
@@ -24,17 +24,85 @@ view : Model -> Browser.Document Msg
 view model =
     { title = "STAMNO_MEDIA"
     , body =
-        [ viewBackground model
-        , div [ class "relative z-1 min-vh-100 fg-primary overflow-x-hidden" ]
-            [ if model.screen == Player then
-                text ""
+        [ if model.needsAuth then
+            viewLogin model
 
-              else
-                viewHeader model.screen model.search model.userMenuOpen
-            , viewScreen model
-            ]
+          else
+            div []
+                [ viewBackground model
+                , div [ class "relative z-1 min-vh-100 fg-primary overflow-x-hidden" ]
+                    [ if model.screen == Player then
+                        text ""
+
+                      else
+                        viewHeader model
+                    , viewScreen model
+                    ]
+                ]
         ]
     }
+
+
+{-| Full-page login screen shown when the server requires auth
+(FMS_REQUIRE_AUTH=true) and no valid token is available. -}
+viewLogin : Model -> Html Msg
+viewLogin model =
+    div [ class "min-vh-100 flex items-center justify-center bg-page" ]
+        [ div [ class "bg-panel ba b--default pa4", style "width" "320px" ]
+            [ div
+                [ class "text-md tracked-wider ttu fg-primary"
+                , style "margin-bottom" "24px"
+                ]
+                [ text "STAMNO_MEDIA" ]
+            , input
+                [ class "f6 tracked-wide"
+                , type_ "text"
+                , placeholder "USERNAME"
+                , value model.loginUser
+                , onInput SetLoginUser
+                , style "width" "100%"
+                , style "margin-bottom" "12px"
+                , style "background" "transparent"
+                , style "border" "1px solid var(--gray-3)"
+                , style "color" "var(--white)"
+                , style "padding" "10px 12px"
+                ]
+                []
+            , input
+                [ class "f6 tracked-wide"
+                , type_ "password"
+                , placeholder "PASSWORD"
+                , value model.loginPass
+                , onInput SetLoginPass
+                , style "width" "100%"
+                , style "margin-bottom" "12px"
+                , style "background" "transparent"
+                , style "border" "1px solid var(--gray-3)"
+                , style "color" "var(--white)"
+                , style "padding" "10px 12px"
+                ]
+                []
+            , button
+                [ class "btn btn-primary"
+                , style "width" "100%"
+                , style "margin-right" "0"
+                , onClick SubmitLogin
+                ]
+                [ text "Sign in" ]
+            , div
+                [ class "f7 fg-muted ttu tracked-wide"
+                , style "margin-top" "12px"
+                , style "min-height" "1em"
+                ]
+                [ case model.loginError of
+                    Just e ->
+                        text e
+
+                    Nothing ->
+                        text ""
+                ]
+            ]
+        ]
 
 
 {-| Full-page background shader, fixed behind all content. -}
@@ -89,9 +157,15 @@ viewScreen model =
             Pages.Requests.view model
 
 
-viewHeader : Screen -> String -> Bool -> Html Msg
-viewHeader screen search userMenuOpen =
+viewHeader : Model -> Html Msg
+viewHeader model =
     let
+        screen =
+            model.screen
+
+        search =
+            model.search
+
         showResults =
             screen == Home && not (String.isEmpty search)
 
@@ -132,7 +206,7 @@ viewHeader screen search userMenuOpen =
                   else
                     text ""
                 ]
-            , viewUserMenu userMenuOpen
+            , viewUserMenu model
             ]
         ]
 
@@ -141,8 +215,28 @@ viewHeader screen search userMenuOpen =
 toggles a small dropdown (Dashboard / API Docs + server caption). Clicking
 outside (transparent fixed overlay) or a menu item closes it.
 -}
-viewUserMenu : Bool -> Html Msg
-viewUserMenu open =
+viewUserMenu : Model -> Html Msg
+viewUserMenu model =
+    let
+        open =
+            model.userMenuOpen
+
+        caption =
+            case model.authUser of
+                Just u ->
+                    "USER " ++ String.toUpper u.name
+
+                Nothing ->
+                    "SERVER LOCALHOST:8080"
+
+        showDashboard =
+            case model.authUser of
+                Just u ->
+                    u.isAdmin
+
+                Nothing ->
+                    True
+    in
     div [ class "relative" ]
         [ div
             [ class "arrow-btn pointer"
@@ -172,14 +266,18 @@ viewUserMenu open =
                     ]
                     [ div
                         [ class "pa2 f7 fg-muted ttu tracked-wide bb b--default" ]
-                        [ text "SERVER LOCALHOST:8080" ]
-                    , a
-                        [ href "/dashboard"
-                        , class "db pa2 f7 ttu tracked-wide fg-primary req-row"
-                        , style "text-decoration" "none"
-                        , onClick CloseUserMenu
-                        ]
-                        [ text "Dashboard" ]
+                        [ text caption ]
+                    , if showDashboard then
+                        a
+                            [ href "/dashboard"
+                            , class "db pa2 f7 ttu tracked-wide fg-primary req-row"
+                            , style "text-decoration" "none"
+                            , onClick CloseUserMenu
+                            ]
+                            [ text "Dashboard" ]
+
+                      else
+                        text ""
                     , a
                         [ href "/api-docs"
                         , class "db pa2 f7 ttu tracked-wide fg-primary req-row"
@@ -187,6 +285,16 @@ viewUserMenu open =
                         , onClick CloseUserMenu
                         ]
                         [ text "API Docs" ]
+                    , case model.token of
+                        Just _ ->
+                            div
+                                [ class "db pa2 f7 ttu tracked-wide fg-muted req-row pointer"
+                                , onClick SignOut
+                                ]
+                                [ text "Sign out" ]
+
+                        Nothing ->
+                            text ""
                     ]
                 ]
 
