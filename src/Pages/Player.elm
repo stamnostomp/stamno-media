@@ -13,7 +13,8 @@ view : Model -> Html Msg
 view model =
     case model.nowPlaying of
         RealPlaying item ->
-            viewReal item model.videoState model.controlsVisible model.resumeProgress
+            -- m32: pass the token so the <video src> can carry api_key=
+            viewReal item model.token model.videoState model.controlsVisible model.resumeProgress
 
         DemoPlaying ->
             viewDemo model.activeId
@@ -40,8 +41,8 @@ the video carries a `data-resume-percent` attribute that index.html's JS
 reads once, on `loadedmetadata`, to seek to that position before playback
 is visible to the user.
 -}
-viewReal : Api.Item -> VideoState -> Bool -> Maybe Int -> Html Msg
-viewReal item videoState controlsVisible maybeResumeProgress =
+viewReal : Api.Item -> Maybe String -> VideoState -> Bool -> Maybe Int -> Html Msg
+viewReal item token videoState controlsVisible maybeResumeProgress =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
@@ -54,7 +55,7 @@ viewReal item videoState controlsVisible maybeResumeProgress =
             , Attr.attribute "data-resume-percent"
                 (maybeResumeProgress |> Maybe.map String.fromInt |> Maybe.withDefault "")
             , autoplay True
-            , src (Api.streamUrl item.id)
+            , src (Api.streamUrl token item.id)
             , onClick VideoTogglePlay
             , style "position" "absolute"
             , style "top" "0"

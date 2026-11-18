@@ -182,9 +182,21 @@ fetchNew token toMsg =
         }
 
 
-streamUrl : String -> String
-streamUrl id =
-    baseUrl ++ "/stream/" ++ id
+{-| m32: stream URL with the token as a Jellyfin-style api_key query param,
+because a <video src> cannot carry the X-Emby-Token header. `Nothing` (open
+mode / not logged in) appends nothing. -}
+streamUrl : Maybe String -> String -> String
+streamUrl token id =
+    baseUrl
+        ++ "/stream/"
+        ++ id
+        ++ (case token of
+                Just t ->
+                    "?api_key=" ++ Url.percentEncode t
+
+                Nothing ->
+                    ""
+           )
 
 
 {-| One media request from GET /Requests (m20a/m20b backend, PascalCase).
