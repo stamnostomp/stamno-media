@@ -6,8 +6,8 @@ for the Discover tab, POST /Requests to create a request from a release. -}
 
 import Api
 import Components exposing (formatBytes)
-import Html exposing (Html, button, div, input, option, select, text)
-import Html.Attributes exposing (class, disabled, placeholder, selected, style, value)
+import Html exposing (Html, button, div, img, input, option, select, text)
+import Html.Attributes exposing (class, disabled, placeholder, selected, src, style, value)
 import Html.Events exposing (onClick, onInput)
 import Types exposing (Model, Msg(..), Tab(..))
 
@@ -164,7 +164,10 @@ statusBadge status =
         [ text (String.toUpper status) ]
 
 
-{-| Discover tab: query the enabled trackers and request a release. -}
+{-| Discover tab (m26): with an empty query show the TMDB popular movies /
+shows poster grids; with a query, search the selected tracker - or ALL
+enabled indexers when the ALL TRACKERS option is selected - and request a
+release from the results. -}
 viewDiscover : Model -> Html Msg
 viewDiscover model =
     div []
@@ -183,14 +186,18 @@ viewDiscover model =
                 , style "padding" "8px 12px"
                 , onInput SetActiveTracker
                 ]
-                (List.map (trackerOption model.activeTracker)
-                    (List.filter .enabled model.trackers)
+                (allTrackersOption model.activeTracker
+                    :: List.map (trackerOption model.activeTracker)
+                        (List.filter .enabled model.trackers)
                 )
             , button [ class "btn btn-primary", onClick SearchReleases, disabled model.reqLoading ]
                 [ text "Search" ]
             ]
         , if model.reqLoading then
             div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "SEARCHING..." ]
+
+          else if String.isEmpty model.reqQuery && List.isEmpty model.releases then
+            viewPopularSections model
 
           else if List.isEmpty model.releases then
             div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "NO RESULTS" ]
@@ -201,6 +208,17 @@ viewDiscover model =
         ]
 
 
+{-| m26: the ALL TRACKERS option (empty value = search every enabled
+indexer server-side). It is the default when no tracker is selected. -}
+allTrackersOption : Maybe String -> Html Msg
+allTrackersOption active =
+    option
+        [ value ""
+        , selected (active == Nothing || active == Just "")
+        ]
+        [ text "ALL TRACKERS" ]
+
+
 trackerOption : Maybe String -> Api.Tracker -> Html Msg
 trackerOption active t =
     option
@@ -208,6 +226,84 @@ trackerOption active t =
         , selected (active == Just t.id)
         ]
         [ text t.name ]
+
+
+{-| m26: with an empty query, show the TMDB popular picks as poster grids;
+clicking a card searches for that title. -}
+viewPopularSections : Model -> Html Msg
+viewPopularSections model =
+    div []
+        [ viewPopularSection "Popular Movies" model.popularMovies
+        , viewPopularSection "Popular Shows" model.popularShows
+        ]
+
+
+viewPopularSection : String -> List Api.DiscoverItem -> Html Msg
+viewPopularSection label items =
+    if List.isEmpty items then
+        text ""
+
+    else
+        div [ class "mb4" ]
+            [ div [ class "f7 ttu tracked-wide fg-muted mb2" ] [ text label ]
+            , div [ class "grid-fill" ]
+                (List.map popularCard items)
+            ]
+
+
+popularCard : Api.DiscoverItem -> Html Msg
+popularCard item =
+    div
+        [ class "relative ba b--default bg-panel overflow-hidden pointer"
+        , style "height" "240px"
+        , onClick (PickPopular item)
+        ]
+        [ case item.posterUrl of
+            Just url ->
+                img
+                    [ class "absolute absolute--fill w-100 h-100"
+                    , style "object-fit" "cover"
+                    , src url
+                    ]
+                    []
+
+            Nothing ->
+                div
+                    [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+                    , style "font-size" "64px"
+                    ]
+                    [ text (String.left 1 (String.toUpper item.name)) ]
+        , div
+            [ class "absolute f7 fg-muted"
+            , style "top" "8px"
+            , style "right" "8px"
+            ]
+            [ text (voteText item.vote) ]
+        , div [ class "absolute left-0 right-0 bottom-0 pa2 flex flex-column gap-2 fade-up-strong" ]
+            [ div [ class "f7 ttu tracked-wide", style "min-height" "2.4em" ] [ text (discoverTitleWithYear item) ]
+            , div [ class "f7 fg-muted" ] [ text item.mediaType ]
+            ]
+        ]
+
+
+discoverTitleWithYear : Api.DiscoverItem -> String
+discoverTitleWithYear item =
+    case item.year of
+        Just y ->
+            item.name ++ " (" ++ String.fromInt y ++ ")"
+
+        Nothing ->
+            item.name
+
+
+voteText : Maybe Float -> String
+voteText mVote =
+    case mVote of
+        Just v ->
+            "RATING " ++ String.fromFloat (toFloat (round (v * 10)) / 10)
+
+        Nothing ->
+            ""
 
 
 releaseCard : Api.Release -> Html Msg

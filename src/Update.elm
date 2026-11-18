@@ -134,17 +134,32 @@ update msg model =
             ( { model | reqQuery = q }, Cmd.none )
 
         SetActiveTracker tid ->
-            ( { model | activeTracker = Just tid }, Cmd.none )
+            -- m26: the empty value (the ALL TRACKERS option) maps to Nothing
+            ( { model | activeTracker = if tid == "" then Nothing else Just tid }, Cmd.none )
 
         SearchReleases ->
-            case model.activeTracker of
-                Just tid ->
-                    ( { model | reqLoading = True, reqNotice = Nothing }
-                    , Api.searchReleases model.token tid model.reqQuery GotReleases
-                    )
+            ( { model | reqLoading = True, reqNotice = Nothing }, searchIndexersCmd model )
 
-                Nothing ->
-                    ( { model | reqNotice = Just "NO TRACKER SELECTED" }, Cmd.none )
+        PickPopular item ->
+            -- m26: picking a popular card fills the query and searches all
+            -- enabled indexers (or the selected one) for it
+            let
+                model2 =
+                    { model | reqQuery = item.name, reqLoading = True, reqNotice = Nothing }
+            in
+            ( model2, searchIndexersCmd model2 )
+
+        GotDiscoverPopular result ->
+            case result of
+                Ok ( movies, shows ) ->
+                    ( { model | popularMovies = movies, popularShows = shows, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
 
         GotReleases result ->
             case result of
@@ -452,13 +467,31 @@ fetchAll token =
         ]
 
 
-{-| Re-fetch the requests queue and the tracker list (m20a/m20b). -}
+{-| Re-fetch the requests queue, the tracker list and the TMDB popular
+sections (m20a/m20b/m26). -}
 fetchRequestsData : Maybe String -> Cmd Msg
 fetchRequestsData token =
     Cmd.batch
         [ Api.fetchRequests token GotRequests
         , Api.fetchTrackers token GotTrackers
+        , Api.fetchDiscoverPopular token GotDiscoverPopular
         ]
+
+
+{-| m26: the indexer search command - with no tracker selected (Nothing or
+the ALL TRACKERS empty option) the server searches ALL enabled indexers. -}
+searchIndexersCmd : Model -> Cmd Msg
+searchIndexersCmd model =
+    let
+        tid =
+            case model.activeTracker of
+                Just "" ->
+                    Nothing
+
+                other ->
+                    other
+    in
+    Api.searchIndexers model.token tid model.reqQuery GotReleases
 
 
 httpErrorToString : Http.Error -> String

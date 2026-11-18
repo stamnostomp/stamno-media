@@ -83,6 +83,8 @@ type alias Model =
     , releases : List Api.Release
     , reqNotice : Maybe String
     , reqLoading : Bool
+    , popularMovies : List Api.DiscoverItem
+    , popularShows : List Api.DiscoverItem
     , time : Float
     , resolution : { width : Float, height : Float }
     , library : List Api.Item
@@ -121,6 +123,8 @@ init _ =
       , releases = []
       , reqNotice = Nothing
       , reqLoading = False
+      , popularMovies = []
+      , popularShows = []
       , time = 0
       , resolution = { width = 1920, height = 1080 }
       , library = []
@@ -174,6 +178,8 @@ type Msg
     | CreateRelease Api.Release
     | GotCreateRequest Int (Result Http.Error Api.RequestEntry)
     | ClearReqNotice
+    | GotDiscoverPopular (Result Http.Error ( List Api.DiscoverItem, List Api.DiscoverItem ))
+    | PickPopular Api.DiscoverItem
     | ScrollRow String Float
     | Tick Float
     | GotViewport Dom.Viewport

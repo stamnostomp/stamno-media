@@ -2,6 +2,7 @@ module Api exposing
     ( AuthResult
     , ContinueItem
     , CreateRequestPayload
+    , DiscoverItem
     , Item
     , Release
     , RequestEntry
@@ -10,11 +11,13 @@ module Api exposing
     , createRequest
     , fetchAuth
     , fetchContinueWatching
+    , fetchDiscoverPopular
     , fetchLibrary
     , fetchNew
     , fetchPopular
     , fetchRequests
     , fetchTrackers
+    , searchIndexers
     , searchReleases
     , streamUrl
     )
@@ -406,3 +409,76 @@ decodeEntry body =
 
         Err err ->
             Err (Http.BadBody (Decode.errorToString err))
+
+
+{-| One entry of GET /Discover/Popular (m26): a TMDB popular movie/show
+with a ready-to-use PosterUrl. -}
+type alias DiscoverItem =
+    { id : String
+    , name : String
+    , mediaType : String
+    , year : Maybe Int
+    , overview : Maybe String
+    , vote : Maybe Float
+    , posterUrl : Maybe String
+    }
+
+
+discoverItemDecoder : Decoder DiscoverItem
+discoverItemDecoder =
+    Decode.map7 DiscoverItem
+        (Decode.field "Id" Decode.string)
+        (Decode.field "Name" Decode.string)
+        (Decode.field "Type" Decode.string)
+        (Decode.maybe (Decode.field "ProductionYear" Decode.int))
+        (Decode.maybe (Decode.field "Overview" Decode.string))
+        (Decode.maybe (Decode.field "VoteAverage" Decode.float))
+        (Decode.maybe (Decode.field "PosterUrl" Decode.string))
+
+
+{-| GET /Discover/Popular -> (movies, shows) from the {"Movies":..,"Shows":..}
+envelope. -}
+fetchDiscoverPopular : Maybe String -> (Result Http.Error ( List DiscoverItem, List DiscoverItem ) -> msg) -> Cmd msg
+fetchDiscoverPopular token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Discover/Popular"
+        , body = Http.emptyBody
+        , expect =
+            Http.expectJson toMsg
+                (Decode.map2 (\m s -> ( m, s ))
+                    (Decode.field "Movies" (Decode.list discoverItemDecoder))
+                    (Decode.field "Shows" (Decode.list discoverItemDecoder))
+                )
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| GET /Indexers/Search?q=..&type=movie[&indexerId=..] (m26): with
+`Nothing` the server searches ALL enabled indexers; with `Just` only
+that one. -}
+searchIndexers : Maybe String -> Maybe String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchIndexers token mIndexerId query toMsg =
+    let
+        base =
+            "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie"
+
+        url =
+            case mIndexerId of
+                Just iid ->
+                    base ++ "&indexerId=" ++ Url.percentEncode iid
+
+                Nothing ->
+                    base
+    in
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ url
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list releaseDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
