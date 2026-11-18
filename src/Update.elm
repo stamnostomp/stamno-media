@@ -19,7 +19,7 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NavigateTo screen ->
-            ( { model | screen = screen }, Cmd.none )
+            ( { model | screen = screen, userMenuOpen = False }, Cmd.none )
 
         OpenDetail titleId ->
             ( { model | screen = Detail, activeId = titleId }, Cmd.none )
@@ -64,6 +64,12 @@ update msg model =
 
                 DemoPlaying ->
                     ( { model | screen = model.previousScreen }, Cmd.none )
+
+        ToggleUserMenu ->
+            ( { model | userMenuOpen = not model.userMenuOpen }, Cmd.none )
+
+        CloseUserMenu ->
+            ( { model | userMenuOpen = False }, Cmd.none )
 
         SetFilter filter ->
             ( { model | filter = filter }, Cmd.none )

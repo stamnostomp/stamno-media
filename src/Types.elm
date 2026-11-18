@@ -85,6 +85,7 @@ type alias Model =
     , resumeProgress : Maybe Int
     , previousScreen : Screen
     , activeRealItem : Maybe Api.Item
+    , userMenuOpen : Bool
     }
 
 
@@ -110,6 +111,7 @@ init _ =
       , resumeProgress = Nothing
       , previousScreen = Home
       , activeRealItem = Nothing
+      , userMenuOpen = False
       }
     , Cmd.batch
         [ Task.perform GotViewport Dom.getViewport
@@ -149,4 +151,6 @@ type Msg
     | VideoFullscreen
     | GotVideoStatus VideoState
     | PlayerActivity
+    | ToggleUserMenu
+    | CloseUserMenu
     | NoOp
