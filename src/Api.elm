@@ -1,13 +1,21 @@
 module Api exposing
     ( AuthResult
     , ContinueItem
+    , CreateRequestPayload
     , Item
+    , Release
+    , RequestEntry
+    , Tracker
     , authHeader
+    , createRequest
     , fetchAuth
     , fetchContinueWatching
     , fetchLibrary
     , fetchNew
     , fetchPopular
+    , fetchRequests
+    , fetchTrackers
+    , searchReleases
     , streamUrl
     )
 
@@ -18,6 +26,7 @@ through Elm, so there's no Elm-side function for it. -}
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
+import Url
 
 
 baseUrl : String
@@ -171,3 +180,229 @@ fetchNew token toMsg =
 streamUrl : String -> String
 streamUrl id =
     baseUrl ++ "/stream/" ++ id
+
+
+{-| One media request from GET /Requests (m20a/m20b backend, PascalCase). -}
+type alias RequestEntry =
+    { id : String
+    , title : String
+    , year : Maybe Int
+    , mediaType : String
+    , status : String
+    , sizeBytes : Maybe Int
+    , sourceRelease : Maybe String
+    , createdAt : String
+    }
+
+
+requestEntryDecoder : Decoder RequestEntry
+requestEntryDecoder =
+    Decode.map8 RequestEntry
+        (Decode.field "Id" Decode.string)
+        (Decode.field "Title" Decode.string)
+        (Decode.maybe (Decode.field "Year" Decode.int))
+        (Decode.field "MediaType" Decode.string)
+        (Decode.field "Status" Decode.string)
+        (Decode.maybe (Decode.field "SizeBytes" Decode.int))
+        (Decode.maybe (Decode.field "SourceRelease" Decode.string))
+        (Decode.field "CreatedAt" Decode.string)
+
+
+{-| A tracker (Jackett indexer) from GET /Trackers. `ApiKey` is null for
+non-admins on the server side and is not modelled here. -}
+type alias Tracker =
+    { id : String
+    , name : String
+    , url : String
+    , enabled : Bool
+    }
+
+
+trackerDecoder : Decoder Tracker
+trackerDecoder =
+    Decode.map4 Tracker
+        (Decode.field "Id" Decode.string)
+        (Decode.field "Name" Decode.string)
+        (Decode.field "Url" Decode.string)
+        (Decode.field "Enabled" Decode.bool)
+
+
+{-| One Torznab release from GET /Trackers/:id/Search. -}
+type alias Release =
+    { title : String
+    , sizeBytes : Maybe Int
+    , seeders : Maybe Int
+    , downloadUrl : Maybe String
+    , magnet : Maybe String
+    , trackerId : String
+    }
+
+
+releaseDecoder : Decoder Release
+releaseDecoder =
+    Decode.map6 Release
+        (Decode.field "Title" Decode.string)
+        (Decode.maybe (Decode.field "SizeBytes" Decode.int))
+        (Decode.maybe (Decode.field "Seeders" Decode.int))
+        (Decode.maybe (Decode.field "DownloadUrl" Decode.string))
+        (Decode.maybe (Decode.field "Magnet" Decode.string))
+        (Decode.field "TrackerId" Decode.string)
+
+
+{-| Body of POST /Requests: Title is required, everything else optional. -}
+type alias CreateRequestPayload =
+    { title : String
+    , year : Maybe Int
+    , mediaType : Maybe String
+    , trackerId : Maybe String
+    , release : Maybe String
+    , sizeBytes : Maybe Int
+    , magnet : Maybe String
+    , downloadUrl : Maybe String
+    }
+
+
+encodeMaybe : String -> (a -> Encode.Value) -> Maybe a -> List ( String, Encode.Value )
+encodeMaybe key enc maybeVal =
+    case maybeVal of
+        Just v ->
+            [ ( key, enc v ) ]
+
+        Nothing ->
+            []
+
+
+encodeCreateRequest : CreateRequestPayload -> Encode.Value
+encodeCreateRequest p =
+    Encode.object <|
+        [ ( "Title", Encode.string p.title ) ]
+            ++ encodeMaybe "Year" Encode.int p.year
+            ++ encodeMaybe "Type" Encode.string p.mediaType
+            ++ encodeMaybe "TrackerId" Encode.string p.trackerId
+            ++ encodeMaybe "Release" Encode.string p.release
+            ++ encodeMaybe "SizeBytes" Encode.int p.sizeBytes
+            ++ encodeMaybe "Magnet" Encode.string p.magnet
+            ++ encodeMaybe "DownloadUrl" Encode.string p.downloadUrl
+
+
+{-| GET /Requests -> the {"Requests": [...]} envelope (non-admins get only
+their own requests). -}
+fetchRequests : Maybe String -> (Result Http.Error (List RequestEntry) -> msg) -> Cmd msg
+fetchRequests token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Requests"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.field "Requests" (Decode.list requestEntryDecoder))
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| GET /Trackers -> the tracker list (ApiKey redacted server-side for
+non-admins). -}
+fetchTrackers : Maybe String -> (Result Http.Error (List Tracker) -> msg) -> Cmd msg
+fetchTrackers token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Trackers"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list trackerDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| GET /Trackers/:id/Search?q=..&type=movie -> matching Torznab releases. -}
+searchReleases : Maybe String -> String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchReleases token trackerId query toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Trackers/" ++ trackerId ++ "/Search?q=" ++ Url.percentEncode query ++ "&type=movie"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list releaseDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| POST /Requests. The msg carries the HTTP status code alongside the
+result so the caller can distinguish 409 (duplicate) from other errors:
+`toMsg code result`. -}
+createRequest : Maybe String -> CreateRequestPayload -> (Int -> Result Http.Error RequestEntry -> msg) -> Cmd msg
+createRequest token payload toMsg =
+    Http.request
+        { method = "POST"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Requests"
+        , body = Http.jsonBody (encodeCreateRequest payload)
+        , expect =
+            Http.expectStringResponse
+                (\result ->
+                    case result of
+                        Ok ( code, entry ) ->
+                            toMsg code (Ok entry)
+
+                        Err err ->
+                            toMsg (errorCodeOf err) (Err err)
+                )
+                entryResultOf
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+errorCodeOf : Http.Error -> Int
+errorCodeOf err =
+    case err of
+        Http.BadStatus code ->
+            code
+
+        _ ->
+            0
+
+
+entryResultOf : Http.Response String -> Result Http.Error ( Int, RequestEntry )
+entryResultOf resp =
+    case resp of
+        Http.BadUrl_ u ->
+            Err (Http.BadUrl u)
+
+        Http.Timeout_ ->
+            Err Http.Timeout
+
+        Http.NetworkError_ ->
+            Err Http.NetworkError
+
+        Http.BadStatus_ md body ->
+            if md.statusCode == 200 || md.statusCode == 201 then
+                case decodeEntry body of
+                    Ok entry ->
+                        Ok ( md.statusCode, entry )
+
+                    Err e ->
+                        Err e
+
+            else
+                Err (Http.BadStatus md.statusCode)
+
+        Http.GoodStatus_ md body ->
+            case decodeEntry body of
+                Ok entry ->
+                    Ok ( md.statusCode, entry )
+
+                Err e ->
+                    Err e
+
+
+decodeEntry : String -> Result Http.Error RequestEntry
+decodeEntry body =
+    case Decode.decodeString requestEntryDecoder body of
+        Ok entry ->
+            Ok entry
+
+        Err err ->
+            Err (Http.BadBody (Decode.errorToString err))

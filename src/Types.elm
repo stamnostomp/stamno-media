@@ -13,9 +13,7 @@ module Types exposing
 import Api
 import Browser.Dom as Dom
 import Catalog exposing (Genre)
-import Dict exposing (Dict)
 import Http
-import Request
 import Task
 
 
@@ -78,7 +76,13 @@ type alias Model =
     , filter : Maybe Genre
     , search : String
     , requestsTab : Tab
-    , requests : Dict Int Request.Entry
+    , myRequests : List Api.RequestEntry
+    , trackers : List Api.Tracker
+    , activeTracker : Maybe String
+    , reqQuery : String
+    , releases : List Api.Release
+    , reqNotice : Maybe String
+    , reqLoading : Bool
     , time : Float
     , resolution : { width : Float, height : Float }
     , library : List Api.Item
@@ -110,7 +114,13 @@ init _ =
       , filter = Nothing
       , search = ""
       , requestsTab = Mine
-      , requests = Request.initialEntries
+      , myRequests = []
+      , trackers = []
+      , activeTracker = Nothing
+      , reqQuery = ""
+      , releases = []
+      , reqNotice = Nothing
+      , reqLoading = False
       , time = 0
       , resolution = { width = 1920, height = 1080 }
       , library = []
@@ -139,6 +149,8 @@ init _ =
         , Api.fetchContinueWatching Nothing GotContinueWatching
         , Api.fetchPopular Nothing GotPopular
         , Api.fetchNew Nothing GotNew
+        , Api.fetchRequests Nothing GotRequests
+        , Api.fetchTrackers Nothing GotTrackers
         ]
     )
 
@@ -153,7 +165,15 @@ type Msg
     | SetFilter (Maybe Genre)
     | SetSearch String
     | SetTab Tab
-    | RequestTitle Int
+    | GotRequests (Result Http.Error (List Api.RequestEntry))
+    | GotTrackers (Result Http.Error (List Api.Tracker))
+    | SetReqQuery String
+    | SetActiveTracker String
+    | SearchReleases
+    | GotReleases (Result Http.Error (List Api.Release))
+    | CreateRelease Api.Release
+    | GotCreateRequest Int (Result Http.Error Api.RequestEntry)
+    | ClearReqNotice
     | ScrollRow String Float
     | Tick Float
     | GotViewport Dom.Viewport

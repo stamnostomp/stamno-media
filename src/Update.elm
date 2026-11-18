@@ -3,13 +3,13 @@ module Update exposing (update)
 import Api
 import Http
 import Ports
-import Request
 import Types
     exposing
         ( Model
         , Msg(..)
         , NowPlaying(..)
         , Screen(..)
+        , Tab(..)
         , VideoState
         , initialVideoState
         )
@@ -19,7 +19,13 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         NavigateTo screen ->
-            ( { model | screen = screen, userMenuOpen = False }, Cmd.none )
+            ( { model | screen = screen, userMenuOpen = False }
+            , if screen == Requests && List.isEmpty model.myRequests then
+                fetchRequestsData model.token
+
+              else
+                Cmd.none
+            )
 
         OpenDetail titleId ->
             ( { model | screen = Detail, activeId = titleId }, Cmd.none )
@@ -78,10 +84,120 @@ update msg model =
             ( { model | search = query }, Cmd.none )
 
         SetTab tab ->
-            ( { model | requestsTab = tab }, Cmd.none )
+            case tab of
+                Mine ->
+                    ( { model | requestsTab = tab }, Api.fetchRequests model.token GotRequests )
 
-        RequestTitle titleId ->
-            ( { model | requests = Request.request titleId model.requests }, Cmd.none )
+                Discover ->
+                    ( { model | requestsTab = tab }
+                    , if List.isEmpty model.trackers then
+                        Api.fetchTrackers model.token GotTrackers
+
+                      else
+                        Cmd.none
+                    )
+
+        GotRequests result ->
+            case result of
+                Ok rs ->
+                    ( { model | myRequests = rs, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+        GotTrackers result ->
+            case result of
+                Ok ts ->
+                    let
+                        active =
+                            case model.activeTracker of
+                                Just _ ->
+                                    model.activeTracker
+
+                                Nothing ->
+                                    ts |> List.filter .enabled |> List.head |> Maybe.map .id
+                    in
+                    ( { model | trackers = ts, activeTracker = active, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( model, Cmd.none )
+
+        SetReqQuery q ->
+            ( { model | reqQuery = q }, Cmd.none )
+
+        SetActiveTracker tid ->
+            ( { model | activeTracker = Just tid }, Cmd.none )
+
+        SearchReleases ->
+            case model.activeTracker of
+                Just tid ->
+                    ( { model | reqLoading = True, reqNotice = Nothing }
+                    , Api.searchReleases model.token tid model.reqQuery GotReleases
+                    )
+
+                Nothing ->
+                    ( { model | reqNotice = Just "NO TRACKER SELECTED" }, Cmd.none )
+
+        GotReleases result ->
+            case result of
+                Ok rs ->
+                    ( { model | releases = rs, reqLoading = False }, Cmd.none )
+
+                Err _ ->
+                    ( { model | releases = [], reqLoading = False, reqNotice = Just "SEARCH FAILED" }, Cmd.none )
+
+        CreateRelease rel ->
+            let
+                payload =
+                    { title =
+                        if String.isEmpty model.reqQuery then
+                            rel.title
+
+                        else
+                            model.reqQuery
+                    , year = Nothing
+                    , mediaType = Just "movie"
+                    , trackerId = model.activeTracker
+                    , release = Just rel.title
+                    , sizeBytes = rel.sizeBytes
+                    , magnet = rel.magnet
+                    , downloadUrl = rel.downloadUrl
+                    }
+            in
+            ( { model | reqLoading = True, reqNotice = Nothing }
+            , Api.createRequest model.token payload GotCreateRequest
+            )
+
+        GotCreateRequest code result ->
+            case result of
+                Ok _ ->
+                    ( { model | reqNotice = Just "REQUESTED", reqLoading = False, requestsTab = Mine }
+                    , Api.fetchRequests model.token GotRequests
+                    )
+
+                Err _ ->
+                    let
+                        notice =
+                            if code == 409 then
+                                "ALREADY IN PROGRESS"
+
+                            else
+                                "REQUEST FAILED"
+                    in
+                    ( { model | reqNotice = Just notice, reqLoading = False }
+                    , Api.fetchRequests model.token GotRequests
+                    )
+
+        ClearReqNotice ->
+            ( { model | reqNotice = Nothing }, Cmd.none )
 
         ScrollRow rowId delta ->
             ( model, Ports.scrollRow { rowId = rowId, delta = delta } )
@@ -216,6 +332,12 @@ update msg model =
                 , continueWatching = []
                 , popular = []
                 , newItems = []
+                , myRequests = []
+                , trackers = []
+                , releases = []
+                , activeTracker = Nothing
+                , reqNotice = Nothing
+                , reqLoading = False
               }
             , Ports.storeToken ""
             )
@@ -326,6 +448,16 @@ fetchAll token =
         , Api.fetchContinueWatching token GotContinueWatching
         , Api.fetchPopular token GotPopular
         , Api.fetchNew token GotNew
+        , fetchRequestsData token
+        ]
+
+
+{-| Re-fetch the requests queue and the tracker list (m20a/m20b). -}
+fetchRequestsData : Maybe String -> Cmd Msg
+fetchRequestsData token =
+    Cmd.batch
+        [ Api.fetchRequests token GotRequests
+        , Api.fetchTrackers token GotTrackers
         ]
 
 

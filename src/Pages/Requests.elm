@@ -1,12 +1,14 @@
 module Pages.Requests exposing (view)
 
-import Catalog exposing (MediaType(..), Title)
-import Components exposing (monogram)
-import Dict exposing (Dict)
-import Html exposing (Html, button, div, text)
-import Html.Attributes exposing (class, style)
-import Html.Events exposing (onClick)
-import Request
+{-| The Requests page (m20d), wired to the real m20a/m20b server API:
+GET /Requests for the Mine tab, GET /Trackers + GET /Trackers/:id/Search
+for the Discover tab, POST /Requests to create a request from a release. -}
+
+import Api
+import Components exposing (formatBytes)
+import Html exposing (Html, button, div, input, option, select, text)
+import Html.Attributes exposing (class, disabled, placeholder, selected, style, value)
+import Html.Events exposing (onClick, onInput)
 import Types exposing (Model, Msg(..), Tab(..))
 
 
@@ -17,17 +19,32 @@ view model =
             [ div [ class "text-xl ttu tracked-wide fg-primary" ] [ text "Requests" ]
             , button [ class "btn btn-primary", onClick (SetTab Discover) ] [ text "+ New Request" ]
             ]
+        , viewNotice model.reqNotice
         , div [ class "flex gap-5 bb b--default mb4" ]
             [ tab model.requestsTab "My Requests" Mine
             , tab model.requestsTab "Discover" Discover
             ]
         , case model.requestsTab of
             Mine ->
-                viewMyRequests model.requests
+                viewMine model
 
             Discover ->
-                viewDiscover model.requests
+                viewDiscover model
         ]
+
+
+{-| Transient banner (request created / duplicate / failure), dismissable. -}
+viewNotice : Maybe String -> Html Msg
+viewNotice mNotice =
+    case mNotice of
+        Nothing ->
+            text ""
+
+        Just notice ->
+            div [ class "ba b--default bg-panel pa2 mb4 f7 ttu tracked-wide fg-muted flex items-center justify-between" ]
+                [ text notice
+                , div [ class "pointer fg-secondary pl4", onClick ClearReqNotice ] [ text "X" ]
+                ]
 
 
 tab : Tab -> String -> Tab -> Html Msg
@@ -53,95 +70,178 @@ tab current label target =
         [ text label ]
 
 
-viewMyRequests : Dict Int Request.Entry -> Html Msg
-viewMyRequests requests =
-    div [ class "flex flex-column bt b--default" ]
-        (List.map viewRequestRow (Request.requested requests))
+{-| Mine tab: the request queue returned by GET /Requests. -}
+viewMine : Model -> Html Msg
+viewMine model =
+    if List.isEmpty model.myRequests then
+        div [ class "f7 fg-muted ttu tracked-wide pa3 bt b--default" ] [ text "NO REQUESTS YET" ]
+
+    else
+        div [ class "flex flex-column bt b--default" ]
+            (List.map viewRequestRow model.myRequests)
 
 
-viewRequestRow : { id : Int, entry : Request.Entry } -> Html Msg
-viewRequestRow req =
-    let
-        title =
-            Catalog.find req.id
-
-        mediaLabel =
-            case title.mediaType of
-                Movie ->
-                    "movie"
-
-                Show ->
-                    "show"
-    in
+viewRequestRow : Api.RequestEntry -> Html Msg
+viewRequestRow r =
     div [ class "req-row flex items-center gap-4 pv3 ph2 bb b--default" ]
         [ div
             [ class "flex-none ba b--default bg-panel flex items-center justify-center text-md fg-ghost b"
             , style "width" "48px"
             , style "height" "48px"
             ]
-            [ text (Catalog.initial title) ]
+            [ text (String.left 1 (String.toUpper r.title)) ]
         , div [ class "flex-auto flex flex-column gap-1" ]
-            [ div [ class "f5 ttu tracked-wide" ] [ text title.title ]
+            [ div [ class "f5 ttu tracked-wide" ] [ text (titleWithYear r) ]
             , div [ class "f7 fg-muted" ]
                 [ text
-                    (mediaLabel
-                        ++ " · "
-                        ++ String.fromInt title.year
-                        ++ " · Requested "
-                        ++ req.entry.date
+                    (String.join " · "
+                        (List.filter (not << String.isEmpty)
+                            [ r.mediaType
+                            , String.slice 0 10 r.createdAt
+                            , sizeText r.sizeBytes
+                            , Maybe.withDefault "" r.sourceRelease
+                            ]
+                        )
                     )
                 ]
             ]
-        , viewStatusBadge req.entry.status
+        , statusBadge r.status
         ]
 
 
+titleWithYear : Api.RequestEntry -> String
+titleWithYear r =
+    case r.year of
+        Just y ->
+            r.title ++ " (" ++ String.fromInt y ++ ")"
+
+        Nothing ->
+            r.title
+
+
+sizeText : Maybe Int -> String
+sizeText mSize =
+    case mSize of
+        Just s ->
+            formatBytes s
+
+        Nothing ->
+            ""
+
+
 {-| Monochrome status badges: distinguished by border style + text tone only. -}
-viewStatusBadge : Request.Status -> Html Msg
-viewStatusBadge status =
+statusBadge : String -> Html Msg
+statusBadge status =
     let
         tone =
             case status of
-                Request.Available ->
-                    "b--strong fg-primary"
+                "Pending" ->
+                    "b--default b--dashed fg-muted"
 
-                Request.Processing ->
+                "Approved" ->
                     "b--default fg-secondary"
 
-                Request.Pending ->
-                    "b--default b--dashed fg-muted"
+                "Downloading" ->
+                    "b--default fg-secondary"
+
+                "Imported" ->
+                    "b--strong fg-primary"
+
+                "Rejected" ->
+                    "b--default fg-muted"
+
+                "Failed" ->
+                    "b--default fg-muted"
+
+                _ ->
+                    "b--default fg-secondary"
     in
     div
         [ class "ba f7 tracked-wide ttu"
         , class tone
         , style "padding" "4px 12px"
         ]
-        [ text (Request.statusLabel status) ]
+        [ text (String.toUpper status) ]
 
 
-viewDiscover : Dict Int Request.Entry -> Html Msg
-viewDiscover requests =
-    div [ class "grid-fill" ]
-        (List.map discoverCard (Request.discoverable requests Catalog.catalog))
+{-| Discover tab: query the enabled trackers and request a release. -}
+viewDiscover : Model -> Html Msg
+viewDiscover model =
+    div []
+        [ div [ class "flex items-center gap-3 mb4" ]
+            [ input
+                [ class "f6 tracked-wide"
+                , style "min-width" "320px"
+                , style "padding" "8px 12px"
+                , placeholder "SEARCH$"
+                , value model.reqQuery
+                , onInput SetReqQuery
+                ]
+                []
+            , select
+                [ class "f6 tracked-wide bg-panel ba b--default fg-primary"
+                , style "padding" "8px 12px"
+                , onInput SetActiveTracker
+                ]
+                (List.map (trackerOption model.activeTracker)
+                    (List.filter .enabled model.trackers)
+                )
+            , button [ class "btn btn-primary", onClick SearchReleases, disabled model.reqLoading ]
+                [ text "Search" ]
+            ]
+        , if model.reqLoading then
+            div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "SEARCHING..." ]
+
+          else if List.isEmpty model.releases then
+            div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "NO RESULTS" ]
+
+          else
+            div [ class "grid-fill" ]
+                (List.map releaseCard model.releases)
+        ]
 
 
-discoverCard : Title -> Html Msg
-discoverCard title =
+trackerOption : Maybe String -> Api.Tracker -> Html Msg
+trackerOption active t =
+    option
+        [ value t.id
+        , selected (active == Just t.id)
+        ]
+        [ text t.name ]
+
+
+releaseCard : Api.Release -> Html Msg
+releaseCard rel =
     div [ class "relative ba b--default bg-panel overflow-hidden", style "height" "240px" ]
-        [ monogram "64px" title
+        [ div
+            [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+            , style "font-size" "64px"
+            ]
+            [ text (String.left 1 (String.toUpper rel.title)) ]
         , div
             [ class "absolute f7 fg-muted"
             , style "top" "8px"
             , style "right" "8px"
             ]
-            [ text (String.fromInt title.year) ]
+            [ text (sizeText rel.sizeBytes) ]
         , div [ class "absolute left-0 right-0 bottom-0 pa2 flex flex-column gap-2 fade-up-strong" ]
-            [ div [ class "f7 ttu tracked-wide" ] [ text title.title ]
+            [ div [ class "f7 ttu tracked-wide", style "min-height" "2.4em" ] [ text rel.title ]
+            , div [ class "f7 fg-muted" ] [ text (seedersText rel.seeders) ]
             , div
                 [ class "req-btn tc f7 tracked-wide ttu"
                 , style "padding" "6px 0"
-                , onClick (RequestTitle title.id)
+                , onClick (CreateRelease rel)
                 ]
                 [ text "+ Request" ]
             ]
         ]
+
+
+seedersText : Maybe Int -> String
+seedersText mSeeders =
+    case mSeeders of
+        Just n ->
+            "seeders " ++ String.fromInt n
+
+        Nothing ->
+            ""
