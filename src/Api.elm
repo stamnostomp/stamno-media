@@ -53,6 +53,8 @@ type alias Item =
     , size : Int
     , mime : String
     , displayTitle : String
+    , itemType : String
+    , seriesName : Maybe String
     }
 
 
@@ -68,15 +70,42 @@ displayTitleField =
         )
 
 
+{-| m43: item type ("movie"/"episode"/...) from lowercase `type` or
+PascalCase `Type`, defaulting to "movie". -}
+itemTypeField : Decoder String
+itemTypeField =
+    Decode.map (Maybe.withDefault "movie")
+        (Decode.maybe
+            (Decode.oneOf
+                [ Decode.field "type" Decode.string
+                , Decode.field "Type" Decode.string
+                ]
+            )
+        )
+
+
+{-| m43: optional series name for episodes. -}
+seriesNameField : Decoder (Maybe String)
+seriesNameField =
+    Decode.maybe
+        (Decode.oneOf
+            [ Decode.field "seriesName" Decode.string
+            , Decode.field "SeriesName" Decode.string
+            ]
+        )
+
+
 itemDecoder : Decoder Item
 itemDecoder =
     Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map5 Item
+        (Decode.map7 Item
             (Decode.field "id" Decode.string)
             (Decode.field "title" Decode.string)
             (Decode.field "size" Decode.int)
             (Decode.field "mime" Decode.string)
             (Decode.succeed "")
+            itemTypeField
+            seriesNameField
         )
         displayTitleField
 
@@ -90,19 +119,23 @@ type alias ContinueItem =
     , mime : String
     , progress : Int
     , displayTitle : String
+    , itemType : String
+    , seriesName : Maybe String
     }
 
 
 continueItemDecoder : Decoder ContinueItem
 continueItemDecoder =
     Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map6 ContinueItem
+        (Decode.map8 ContinueItem
             (Decode.field "id" Decode.string)
             (Decode.field "title" Decode.string)
             (Decode.field "size" Decode.int)
             (Decode.field "mime" Decode.string)
             (Decode.field "progress" Decode.int)
             (Decode.succeed "")
+            itemTypeField
+            seriesNameField
         )
         displayTitleField
 

@@ -7,14 +7,14 @@ import Html.Attributes exposing (class)
 import Types exposing (Model, Msg)
 
 
-{-| m41: real server library items of movie-ish (video/*) mime, searched
-by the global search box; rendered with the standard poster cards. -}
+{-| m41/m43: real server library items of type "movie" (fallback: video
+mime without a series), searched by the global search box. -}
 view : Model -> Html Msg
 view model =
     let
         movies =
             model.library
-                |> List.filter (\i -> String.startsWith "video/" i.mime)
+                |> List.filter isMovie
                 |> search model.search
     in
     div [ class "pa4" ]
@@ -25,6 +25,12 @@ view model =
           else
             div [ class "grid-fill" ] (List.map (libraryCard model.token) movies)
         ]
+
+
+isMovie : Api.Item -> Bool
+isMovie i =
+    i.itemType == "movie"
+        || (i.itemType == "" && String.startsWith "video/" i.mime && i.seriesName == Nothing)
 
 
 search : String -> List Api.Item -> List Api.Item
