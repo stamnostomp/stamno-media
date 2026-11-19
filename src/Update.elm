@@ -67,8 +67,12 @@ update msg model =
                 Ok meta ->
                     ( { model | itemMeta = Just meta }, Cmd.none )
 
-                Err _ ->
-                    ( { model | itemMeta = Nothing }, Cmd.none )
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | itemMeta = Nothing }, Cmd.none )
 
         OpenSeries name ->
             -- m47: series view -- resolve the TMDB id, then fetch episodes
@@ -159,8 +163,12 @@ update msg model =
                     in
                     ( { model | playSrc = src }, Cmd.none )
 
-                Err _ ->
-                    ( { model | playSrc = Nothing }, Cmd.none )
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | playSrc = Nothing }, Cmd.none )
 
         BackFromPlayer ->
             case model.nowPlaying of
@@ -290,8 +298,12 @@ update msg model =
                 Ok rs ->
                     ( { model | releases = rs, reqLoading = False }, Cmd.none )
 
-                Err _ ->
-                    ( { model | releases = [], reqLoading = False, reqNotice = Just "SEARCH FAILED" }, Cmd.none )
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | releases = [], reqLoading = False, reqNotice = Just "SEARCH FAILED" }, Cmd.none )
 
         CreateRelease rel ->
             let
@@ -329,18 +341,22 @@ update msg model =
                     , Api.fetchRequests model.token GotRequests
                     )
 
-                Err _ ->
-                    let
-                        notice =
-                            if code == 409 then
-                                "ALREADY IN PROGRESS"
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
 
-                            else
-                                "REQUEST FAILED"
-                    in
-                    ( { model | reqNotice = Just notice, reqLoading = False }
-                    , Api.fetchRequests model.token GotRequests
-                    )
+                    else
+                        let
+                            notice =
+                                if code == 409 then
+                                    "ALREADY IN PROGRESS"
+
+                                else
+                                    "REQUEST FAILED"
+                        in
+                        ( { model | reqNotice = Just notice, reqLoading = False }
+                        , Api.fetchRequests model.token GotRequests
+                        )
 
         ClearReqNotice ->
             ( { model | reqNotice = Nothing }, Cmd.none )
