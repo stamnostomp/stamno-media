@@ -3,8 +3,9 @@ module Pages.RealDetail exposing (view)
 import Api
 import Components exposing (formatBytes, libraryRowCard, posterImage)
 import Html exposing (Html, button, div, span, text)
-import Html.Attributes exposing (class, style)
+import Html.Attributes exposing (class, disabled, style)
 import Html.Events exposing (onClick)
+import Pages.Series
 import Types exposing (Model, Msg(..))
 
 
@@ -14,7 +15,80 @@ view model =
         Nothing ->
             text ""
 
+        -- m55: an episode card opens the SERIES detail (header + PLAY +
+        -- season select + episode cards) instead of the single-item block
         Just item ->
+            case item.seriesName of
+                Just seriesName ->
+                    seriesDetailView model item seriesName
+
+                Nothing ->
+                    itemDetailView model item
+
+
+{-| m55: the series variant of the detail page. -}
+seriesDetailView : Model -> Api.Item -> String -> Html Msg
+seriesDetailView model item seriesName =
+    let
+        title =
+            model.seriesDetail
+                |> Maybe.andThen .name
+                |> Maybe.withDefault seriesName
+
+        mTarget =
+            Pages.Series.playTargetEpisode model
+
+        resume =
+            case mTarget of
+                Just t ->
+                    model.continueWatching
+                        |> List.filter (\c -> c.id == t.id)
+                        |> List.head
+                        |> Maybe.map (\c -> c.progress > 0 && c.progress < 100)
+                        |> Maybe.withDefault False
+
+                Nothing ->
+                    False
+    in
+    div []
+        [ div
+            [ class "pointer pv3 ph4 f6 fg-secondary tracked-wide"
+            , onClick (NavigateTo model.previousScreen)
+            ]
+            [ text "\u{2190} BACK" ]
+        , div [ class "ph4" ]
+            [ Pages.Series.seriesHeaderView model title ]
+        , div [ class "flex gap-4 ph4 pb4" ]
+            [ button
+                [ class "btn btn-primary"
+                , disabled (mTarget == Nothing)
+                , onClick (Maybe.withDefault (OpenRealPlayer item) (Maybe.map OpenRealPlayer mTarget))
+                ]
+                [ text
+                    (if resume then
+                        "\u{25B6} Resume"
+
+                     else
+                        "\u{25B6} Play"
+                    )
+                ]
+            ]
+        , div [ class "ph4 pb5" ]
+            [ Pages.Series.seriesEpisodesView model title ]
+        , div [ class "ph4 pb5" ]
+            [ div [ class "f6 tracked-wider ttu fg-secondary mb3" ] [ text "More From Your Library" ]
+            , div [ class "row-scroll flex gap-4" ]
+                (model.library
+                    |> List.filter (\i -> i.id /= item.id)
+                    |> List.take 10
+                    |> List.map (libraryRowCard model.token)
+                )
+            ]
+        ]
+
+
+itemDetailView : Model -> Api.Item -> Html Msg
+itemDetailView model item =
             let
                 maybeProgress =
                     model.continueWatching

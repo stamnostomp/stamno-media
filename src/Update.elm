@@ -36,9 +36,30 @@ update msg model =
             )
 
         OpenRealDetail item ->
-            ( { model | screen = RealDetail, activeRealItem = Just item, itemMeta = Nothing, previousScreen = model.screen }
+            -- m55: episode cards (seriesName set) also resolve the series
+            -- (search -> episodes) so the detail page can show the series view
+            let
+                seriesCmd =
+                    case item.seriesName of
+                        Just name ->
+                            Api.fetchSeriesSearch model.token name GotSeriesSearch
+
+                        Nothing ->
+                            Cmd.none
+            in
+            ( { model
+                | screen = RealDetail
+                , activeRealItem = Just item
+                , itemMeta = Nothing
+                , seriesDetail = Nothing
+                , seriesSeason = Nothing
+                , previousScreen = model.screen
+              }
               -- m34: fetch the stored TMDB metadata for the detail page
-            , Api.fetchItemMetadata model.token item.id GotItemMetadata
+            , Cmd.batch
+                [ Api.fetchItemMetadata model.token item.id GotItemMetadata
+                , seriesCmd
+                ]
             )
 
         GotItemMetadata result ->
