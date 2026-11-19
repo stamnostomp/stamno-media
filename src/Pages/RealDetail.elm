@@ -58,7 +58,7 @@ seriesDetailView model item seriesName =
             [ text "\u{2190} BACK" ]
         , div [ class "ph4" ]
             [ Pages.Series.seriesHeaderView model title ]
-        , div [ class "flex gap-4 ph4 pb4" ]
+        , div [ class "flex gap-4 ph4 pb4 justify-end" ]
             [ button
                 [ class "btn btn-primary"
                 , disabled (mTarget == Nothing)
