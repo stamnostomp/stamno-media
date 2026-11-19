@@ -9,9 +9,15 @@ module Api exposing
     , PlaybackInfo
     , Release
     , RequestEntry
+    , SeriesDetail
+    , SeriesEpisode
+    , SeriesHit
+    , SeriesSeason
     , Tracker
     , releaseDecoder
     , searchResultsDecoder
+    , seriesDetailDecoder
+    , seriesHitDecoder
     , authHeader
     , createRequest
     , fetchAuth
@@ -23,6 +29,8 @@ module Api exposing
     , fetchPlaybackInfo
     , fetchPopular
     , fetchRequests
+    , fetchSeriesEpisodes
+    , fetchSeriesSearch
     , fetchTrackers
     , imageUrl
     , itemMetadataDecoder
@@ -55,6 +63,8 @@ type alias Item =
     , displayTitle : String
     , itemType : String
     , seriesName : Maybe String
+    , itemSeason : Maybe Int
+    , itemEpisode : Maybe Int
     }
 
 
@@ -95,17 +105,52 @@ seriesNameField =
         )
 
 
+
+{-| m47: season/episode numbers on legacy rows (lowercase) and Jellyfin
+items (PascalCase). -}
+itemSeasonField : Decoder (Maybe Int)
+itemSeasonField =
+    Decode.maybe
+        (Decode.oneOf
+            [ Decode.field "seasonNumber" Decode.int
+            , Decode.field "SeasonNumber" Decode.int
+            ]
+        )
+
+
+itemEpisodeField : Decoder (Maybe Int)
+itemEpisodeField =
+    Decode.maybe
+        (Decode.oneOf
+            [ Decode.field "episodeNumber" Decode.int
+            , Decode.field "EpisodeNumber" Decode.int
+            ]
+        )
+
+{-| 7-field constructor; itemSeason/itemEpisode are layered on by map2
+(the pinned elm/json has no map9+). -}
+mkItem : String -> String -> Int -> String -> String -> String -> Maybe String -> Item
+mkItem id title size mime displayTitle itemType seriesName =
+    Item id title size mime displayTitle itemType seriesName Nothing Nothing
+
+
 itemDecoder : Decoder Item
 itemDecoder =
     Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map7 Item
-            (Decode.field "id" Decode.string)
-            (Decode.field "title" Decode.string)
-            (Decode.field "size" Decode.int)
-            (Decode.field "mime" Decode.string)
-            (Decode.succeed "")
-            itemTypeField
-            seriesNameField
+        (Decode.map2 (\i se -> { i | itemSeason = se })
+            (Decode.map2 (\i ep -> { i | itemEpisode = ep })
+                (Decode.map7 mkItem
+                    (Decode.field "id" Decode.string)
+                    (Decode.field "title" Decode.string)
+                    (Decode.field "size" Decode.int)
+                    (Decode.field "mime" Decode.string)
+                    (Decode.succeed "")
+                    itemTypeField
+                    seriesNameField
+                )
+                itemEpisodeField
+            )
+            itemSeasonField
         )
         displayTitleField
 
@@ -121,21 +166,34 @@ type alias ContinueItem =
     , displayTitle : String
     , itemType : String
     , seriesName : Maybe String
+    , itemSeason : Maybe Int
+    , itemEpisode : Maybe Int
     }
+
+
+mkContinueItem : String -> String -> Int -> String -> Int -> String -> String -> Maybe String -> ContinueItem
+mkContinueItem id title size mime progress displayTitle itemType seriesName =
+    ContinueItem id title size mime progress displayTitle itemType seriesName Nothing Nothing
 
 
 continueItemDecoder : Decoder ContinueItem
 continueItemDecoder =
     Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map8 ContinueItem
-            (Decode.field "id" Decode.string)
-            (Decode.field "title" Decode.string)
-            (Decode.field "size" Decode.int)
-            (Decode.field "mime" Decode.string)
-            (Decode.field "progress" Decode.int)
-            (Decode.succeed "")
-            itemTypeField
-            seriesNameField
+        (Decode.map2 (\i se -> { i | itemSeason = se })
+            (Decode.map2 (\i ep -> { i | itemEpisode = ep })
+                (Decode.map8 mkContinueItem
+                    (Decode.field "id" Decode.string)
+                    (Decode.field "title" Decode.string)
+                    (Decode.field "size" Decode.int)
+                    (Decode.field "mime" Decode.string)
+                    (Decode.field "progress" Decode.int)
+                    (Decode.succeed "")
+                    itemTypeField
+                    seriesNameField
+                )
+                itemEpisodeField
+            )
+            itemSeasonField
         )
         displayTitleField
 
@@ -703,6 +761,115 @@ searchIndexers token mIndexerId query toMsg =
         , url = baseUrl ++ url
         , body = Http.emptyBody
         , expect = Http.expectJson toMsg searchResultsDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m47: one hit of GET /Series/Search (the discoverEntry shape with
+Type = "Series"). -}
+type alias SeriesHit =
+    { id : String
+    , name : String
+    , year : Maybe Int
+    , overview : Maybe String
+    , posterUrl : Maybe String
+    }
+
+
+seriesHitDecoder : Decoder SeriesHit
+seriesHitDecoder =
+    Decode.map5 SeriesHit
+        (Decode.field "Id" Decode.string)
+        (Decode.field "Name" Decode.string)
+        (Decode.maybe (Decode.field "ProductionYear" Decode.int))
+        (Decode.maybe (Decode.field "Overview" Decode.string))
+        (Decode.maybe (Decode.field "PosterUrl" Decode.string))
+
+
+{-| m47: one episode of GET /Series/:id/Episodes. `downloaded` is set by
+the server when a matching library Episode item exists. -}
+type alias SeriesEpisode =
+    { episodeNumber : Int
+    , name : Maybe String
+    , overview : Maybe String
+    , airDate : Maybe String
+    , stillUrl : Maybe String
+    , downloaded : Bool
+    }
+
+
+seriesEpisodeDecoder : Decoder SeriesEpisode
+seriesEpisodeDecoder =
+    Decode.map6 SeriesEpisode
+        (Decode.field "EpisodeNumber" Decode.int)
+        (Decode.maybe (Decode.field "Name" Decode.string))
+        (Decode.maybe (Decode.field "Overview" Decode.string))
+        (Decode.maybe (Decode.field "AirDate" Decode.string))
+        (Decode.maybe (Decode.field "StillUrl" Decode.string))
+        (Decode.field "Downloaded" Decode.bool)
+
+
+type alias SeriesSeason =
+    { seasonNumber : Int
+    , name : Maybe String
+    , episodes : List SeriesEpisode
+    }
+
+
+seriesSeasonDecoder : Decoder SeriesSeason
+seriesSeasonDecoder =
+    Decode.map3 SeriesSeason
+        (Decode.field "SeasonNumber" Decode.int)
+        (Decode.maybe (Decode.field "Name" Decode.string))
+        (Decode.field "Episodes" (Decode.list seriesEpisodeDecoder))
+
+
+{-| m47: the full series view payload of GET /Series/:id/Episodes. -}
+type alias SeriesDetail =
+    { id : String
+    , name : Maybe String
+    , year : Maybe Int
+    , overview : Maybe String
+    , posterUrl : Maybe String
+    , seasons : List SeriesSeason
+    }
+
+
+seriesDetailDecoder : Decoder SeriesDetail
+seriesDetailDecoder =
+    Decode.map6 SeriesDetail
+        (Decode.field "Id" Decode.string)
+        (Decode.maybe (Decode.field "Name" Decode.string))
+        (Decode.maybe (Decode.field "Year" Decode.int))
+        (Decode.maybe (Decode.field "Overview" Decode.string))
+        (Decode.maybe (Decode.field "PosterUrl" Decode.string))
+        (Decode.field "Seasons" (Decode.list seriesSeasonDecoder))
+
+
+{-| m47: GET /Series/Search?name=.. -> TMDB TV search hits. -}
+fetchSeriesSearch : Maybe String -> String -> (Result Http.Error (List SeriesHit) -> msg) -> Cmd msg
+fetchSeriesSearch token name toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Series/Search?name=" ++ Url.percentEncode name
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list seriesHitDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m47: GET /Series/:id/Episodes -> seasons with per-episode Downloaded. -}
+fetchSeriesEpisodes : Maybe String -> String -> (Result Http.Error SeriesDetail -> msg) -> Cmd msg
+fetchSeriesEpisodes token seriesId toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Series/" ++ Url.percentEncode seriesId ++ "/Episodes"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg seriesDetailDecoder
         , timeout = Nothing
         , tracker = Nothing
         }

@@ -102,4 +102,51 @@ suite =
 
                     other ->
                         Expect.fail ("unexpected: " ++ Debug.toString other)
+        , test "m47 seriesDetailDecoder: full /Series/:id/Episodes payload" <|
+            \_ ->
+                case Decode.decodeString Api.seriesDetailDecoder
+                    """{"Id":"1942","Name":"Family Guy","Year":1999,"Overview":"A cartoon.","PosterUrl":"http://img/fg.jpg","Seasons":[{"SeasonNumber":25,"Name":"Season 25","Episodes":[{"EpisodeNumber":0,"Name":"Happy Hell-o-ween","Overview":"o0","AirDate":"2024-10-27","StillUrl":"http://img/s0.jpg","Downloaded":true},{"EpisodeNumber":1,"Name":"Ep One","Overview":null,"AirDate":null,"StillUrl":null,"Downloaded":false}]},{"SeasonNumber":0,"Name":"Specials","Episodes":[]}]}""" of
+                    Ok d ->
+                        Expect.all
+                            [ \_ -> Expect.equal d.id "1942"
+                            , \_ -> Expect.equal d.name (Just "Family Guy")
+                            , \_ -> Expect.equal d.year (Just 1999)
+                            , \_ -> Expect.equal d.posterUrl (Just "http://img/fg.jpg")
+                            , \_ -> Expect.equal (List.map .seasonNumber d.seasons) [ 25, 0 ]
+                            , \_ -> Expect.equal (List.map .episodeNumber (List.head d.seasons |> Maybe.map .episodes |> Maybe.withDefault [])) [ 0, 1 ]
+                            , \_ -> Expect.equal (List.map .downloaded (List.concatMap .episodes d.seasons)) [ True, False ]
+                            , \_ -> Expect.equal (List.map .name (List.concatMap .episodes d.seasons)) [ Just "Happy Hell-o-ween", Just "Ep One" ]
+                            ]
+                            ()
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m47 seriesHitDecoder: /Series/Search entry" <|
+            \_ ->
+                case Decode.decodeString Api.seriesHitDecoder
+                    """{"Id":"1942","Name":"Family Guy","Type":"Series","ProductionYear":1999,"Overview":"A cartoon.","VoteAverage":8.9,"PosterUrl":"http://img/fg.jpg"}""" of
+                    Ok h ->
+                        Expect.all
+                            [ \_ -> Expect.equal h.id "1942"
+                            , \_ -> Expect.equal h.name "Family Guy"
+                            , \_ -> Expect.equal h.year (Just 1999)
+                            , \_ -> Expect.equal h.posterUrl (Just "http://img/fg.jpg")
+                            ]
+                            ()
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m47 seriesDetailDecoder: empty graceful payload (no key / TMDB down)" <|
+            \_ ->
+                case Decode.decodeString Api.seriesDetailDecoder
+                    """{"Id":"1942","Name":null,"Year":null,"Overview":null,"PosterUrl":null,"Seasons":[]}""" of
+                    Ok d ->
+                        Expect.all
+                            [ \_ -> Expect.equal d.name Nothing
+                            , \_ -> Expect.equal d.seasons []
+                            ]
+                            ()
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
         ]

@@ -14,6 +14,7 @@ import Pages.Movies
 import Pages.Player
 import Pages.RealDetail
 import Pages.Requests
+import Pages.Series
 import Pages.Shows
 import Shaders.Background
 import Shaders.Mesh
@@ -156,6 +157,9 @@ viewScreen model =
 
         Requests ->
             Pages.Requests.view model
+
+        SeriesView _ ->
+            Pages.Series.view model
 
 
 viewHeader : Model -> Html Msg

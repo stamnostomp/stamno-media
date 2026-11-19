@@ -49,6 +49,45 @@ update msg model =
                 Err _ ->
                     ( { model | itemMeta = Nothing }, Cmd.none )
 
+        OpenSeries name ->
+            -- m47: series view -- resolve the TMDB id, then fetch episodes
+            ( { model | screen = SeriesView name, seriesHits = [], seriesDetail = Nothing, previousScreen = Shows }
+            , Api.fetchSeriesSearch model.token name GotSeriesSearch
+            )
+
+        GotSeriesSearch result ->
+            case result of
+                Ok hits ->
+                    let
+                        cmd =
+                            case List.head hits of
+                                Just hit ->
+                                    Api.fetchSeriesEpisodes model.token hit.id GotSeriesEpisodes
+
+                                Nothing ->
+                                    Cmd.none
+                    in
+                    ( { model | seriesHits = hits, needsAuth = False }, cmd )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | seriesHits = [] }, Cmd.none )
+
+        GotSeriesEpisodes result ->
+            case result of
+                Ok detail ->
+                    ( { model | seriesDetail = Just detail, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | seriesDetail = Nothing }, Cmd.none )
+
         OpenRealPlayer item ->
             ( { model
                 | screen = Player
@@ -493,7 +532,7 @@ upsertContinueWatching item videoState existing =
                 round (100 * videoState.currentTime / videoState.duration)
         in
         if percent > 2 && percent < 95 then
-            { id = item.id, title = item.title, size = item.size, mime = item.mime, progress = percent, displayTitle = item.displayTitle, itemType = item.itemType, seriesName = item.seriesName }
+            { id = item.id, title = item.title, size = item.size, mime = item.mime, progress = percent, displayTitle = item.displayTitle, itemType = item.itemType, seriesName = item.seriesName, itemSeason = item.itemSeason, itemEpisode = item.itemEpisode }
                 :: withoutItem
 
         else

@@ -5,7 +5,8 @@ import Components exposing (libraryCard)
 import Dict
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
-import Types exposing (Model, Msg)
+import Html.Events exposing (onClick)
+import Types exposing (Model, Msg(..))
 
 
 {-| m43: real episode items grouped by series name; searched by the global
@@ -38,7 +39,12 @@ isEpisode i =
 seriesSection : Maybe String -> ( String, List Api.Item ) -> Html Msg
 seriesSection token ( series, eps ) =
     div []
-        [ div [ class "f6 tracked-wider ttu fg-secondary mb3" ] [ text series ]
+        [ -- m47: clicking the series header opens the series view
+          div
+            [ class "f6 tracked-wider ttu fg-secondary mb3 pointer b"
+            , onClick (OpenSeries series)
+            ]
+            [ text series ]
         , div [ class "grid-fill" ] (List.map (libraryCard token) eps)
         ]
 

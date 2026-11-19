@@ -106,7 +106,7 @@ continueWatchingCard token item =
         , style "height" "240px"
         , onClick
             (OpenRealDetail
-                { id = item.id, title = item.title, size = item.size, mime = item.mime, displayTitle = item.displayTitle, itemType = item.itemType, seriesName = item.seriesName }
+                { id = item.id, title = item.title, size = item.size, mime = item.mime, displayTitle = item.displayTitle, itemType = item.itemType, seriesName = item.seriesName, itemSeason = item.itemSeason, itemEpisode = item.itemEpisode }
             )
         ]
         [ div

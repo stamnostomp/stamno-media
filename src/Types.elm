@@ -26,6 +26,7 @@ type Screen
     | RealDetail
     | Player
     | Requests
+    | SeriesView String
 
 
 type Tab
@@ -102,6 +103,8 @@ type alias Model =
     , previousScreen : Screen
     , activeRealItem : Maybe Api.Item
     , itemMeta : Maybe Api.ItemMetadata
+    , seriesHits : List Api.SeriesHit
+    , seriesDetail : Maybe Api.SeriesDetail
     , userMenuOpen : Bool
     , token : Maybe String
     , authUser : Maybe AuthUser
@@ -145,6 +148,8 @@ init _ =
       , previousScreen = Home
       , activeRealItem = Nothing
       , itemMeta = Nothing
+      , seriesHits = []
+      , seriesDetail = Nothing
       , userMenuOpen = False
       , token = Nothing
       , authUser = Nothing
@@ -171,6 +176,9 @@ type Msg
     | OpenPlayer
     | OpenRealDetail Api.Item
     | GotItemMetadata (Result Http.Error Api.ItemMetadata)
+    | OpenSeries String
+    | GotSeriesSearch (Result Http.Error (List Api.SeriesHit))
+    | GotSeriesEpisodes (Result Http.Error Api.SeriesDetail)
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | BackFromPlayer
