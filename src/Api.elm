@@ -52,16 +52,33 @@ type alias Item =
     , title : String
     , size : Int
     , mime : String
+    , displayTitle : String
     }
+
+
+{-| m40: optional displayTitle (server sends the TMDB title); falls back
+to the raw file/release name in `title`. Accepts PascalCase too. -}
+displayTitleField : Decoder (Maybe String)
+displayTitleField =
+    Decode.maybe
+        (Decode.oneOf
+            [ Decode.field "displayTitle" Decode.string
+            , Decode.field "DisplayTitle" Decode.string
+            ]
+        )
 
 
 itemDecoder : Decoder Item
 itemDecoder =
-    Decode.map4 Item
-        (Decode.field "id" Decode.string)
-        (Decode.field "title" Decode.string)
-        (Decode.field "size" Decode.int)
-        (Decode.field "mime" Decode.string)
+    Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
+        (Decode.map5 Item
+            (Decode.field "id" Decode.string)
+            (Decode.field "title" Decode.string)
+            (Decode.field "size" Decode.int)
+            (Decode.field "mime" Decode.string)
+            (Decode.succeed "")
+        )
+        displayTitleField
 
 
 {-| A library item with an in-progress watch percentage (0..100), as
@@ -72,17 +89,22 @@ type alias ContinueItem =
     , size : Int
     , mime : String
     , progress : Int
+    , displayTitle : String
     }
 
 
 continueItemDecoder : Decoder ContinueItem
 continueItemDecoder =
-    Decode.map5 ContinueItem
-        (Decode.field "id" Decode.string)
-        (Decode.field "title" Decode.string)
-        (Decode.field "size" Decode.int)
-        (Decode.field "mime" Decode.string)
-        (Decode.field "progress" Decode.int)
+    Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
+        (Decode.map6 ContinueItem
+            (Decode.field "id" Decode.string)
+            (Decode.field "title" Decode.string)
+            (Decode.field "size" Decode.int)
+            (Decode.field "mime" Decode.string)
+            (Decode.field "progress" Decode.int)
+            (Decode.succeed "")
+        )
+        displayTitleField
 
 
 {-| The auth token returned by POST /Users/AuthenticateByName, plus the

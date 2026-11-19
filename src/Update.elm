@@ -493,7 +493,7 @@ upsertContinueWatching item videoState existing =
                 round (100 * videoState.currentTime / videoState.duration)
         in
         if percent > 2 && percent < 95 then
-            { id = item.id, title = item.title, size = item.size, mime = item.mime, progress = percent }
+            { id = item.id, title = item.title, size = item.size, mime = item.mime, progress = percent, displayTitle = item.displayTitle }
                 :: withoutItem
 
         else
