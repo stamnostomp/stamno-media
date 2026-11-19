@@ -91,8 +91,8 @@ viewRequestRow r =
             ]
             [ text (String.left 1 (String.toUpper r.title)) ]
         , div [ class "flex-auto flex flex-column gap-1" ]
-            [ div [ class "f5 ttu tracked-wide" ] [ text (titleWithYear r) ]
-            , div [ class "f7 fg-muted" ]
+            ([ div [ class "f5 ttu tracked-wide" ] [ text (titleWithYear r) ]
+             , div [ class "f7 fg-muted" ]
                 [ text
                     (String.join " · "
                         (List.filter (not << String.isEmpty)
@@ -105,9 +105,47 @@ viewRequestRow r =
                         )
                     )
                 ]
-            ]
+             ]
+                ++ progressElems r
+            )
         , statusBadge r.status
         ]
+
+
+{-| m37: live Deluge progress bar for Downloading requests (server attaches
+Progress/TorrentState from core.get_torrents_status). -}
+progressElems : Api.RequestEntry -> List (Html Msg)
+progressElems r =
+    case ( r.status, r.progress ) of
+        ( "Downloading", Just p ) ->
+            let
+                pct =
+                    clamp 0 100 p
+
+                label =
+                    String.toUpper (Maybe.withDefault "DOWNLOADING" r.torrentState)
+                        ++ " "
+                        ++ String.fromInt (round pct)
+                        ++ "%"
+            in
+            [ div [ class "flex items-center gap-2" ]
+                [ div
+                    [ class "ba b--default flex-none"
+                    , style "width" "120px"
+                    , style "height" "6px"
+                    ]
+                    [ div
+                        [ class "bg-white h-100"
+                        , style "width" (String.fromFloat pct ++ "%")
+                        ]
+                        []
+                    ]
+                , div [ class "f7 fg-muted ttu tracked-wide" ] [ text label ]
+                ]
+            ]
+
+        _ ->
+            []
 
 
 titleWithYear : Api.RequestEntry -> String

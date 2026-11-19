@@ -325,7 +325,8 @@ streamUrl token id =
 
 
 {-| One media request from GET /Requests (m20a/m20b backend, PascalCase).
-m27: downloadDir is the download location stamped at creation (DownloadDir). -}
+m27: downloadDir is the download location stamped at creation (DownloadDir).
+m37: progress / torrentState are live Deluge values (Progress / TorrentState). -}
 type alias RequestEntry =
     { id : String
     , title : String
@@ -336,6 +337,8 @@ type alias RequestEntry =
     , sourceRelease : Maybe String
     , createdAt : String
     , downloadDir : Maybe String
+    , progress : Maybe Float
+    , torrentState : Maybe String
     }
 
 
@@ -343,15 +346,21 @@ requestEntryDecoder : Decoder RequestEntry
 requestEntryDecoder =
     -- (map2/map8 only: the pinned elm/json has no map9/required/optional)
     Decode.map2 (\r d -> { r | downloadDir = d })
-        (Decode.map8 (\i t y m s sz sr c -> RequestEntry i t y m s sz sr c Nothing)
-            (Decode.field "Id" Decode.string)
-            (Decode.field "Title" Decode.string)
-            (Decode.maybe (Decode.field "Year" Decode.int))
-            (Decode.field "MediaType" Decode.string)
-            (Decode.field "Status" Decode.string)
-            (Decode.maybe (Decode.field "SizeBytes" Decode.int))
-            (Decode.maybe (Decode.field "SourceRelease" Decode.string))
-            (Decode.field "CreatedAt" Decode.string)
+        (Decode.map2 (\r p -> { r | progress = p })
+            (Decode.map2 (\r ts -> { r | torrentState = ts })
+                (Decode.map8 (\i t y m s sz sr c -> RequestEntry i t y m s sz sr c Nothing Nothing Nothing)
+                    (Decode.field "Id" Decode.string)
+                    (Decode.field "Title" Decode.string)
+                    (Decode.maybe (Decode.field "Year" Decode.int))
+                    (Decode.field "MediaType" Decode.string)
+                    (Decode.field "Status" Decode.string)
+                    (Decode.maybe (Decode.field "SizeBytes" Decode.int))
+                    (Decode.maybe (Decode.field "SourceRelease" Decode.string))
+                    (Decode.field "CreatedAt" Decode.string)
+                )
+                (Decode.maybe (Decode.field "TorrentState" Decode.string))
+            )
+            (Decode.maybe (Decode.field "Progress" Decode.float))
         )
         (Decode.maybe (Decode.field "DownloadDir" Decode.string))
 

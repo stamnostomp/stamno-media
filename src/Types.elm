@@ -83,6 +83,7 @@ type alias Model =
     , releases : List Api.Release
     , reqNotice : Maybe String
     , reqLoading : Bool
+    , reqPollAcc : Float
     , popularMovies : List Api.DiscoverItem
     , popularShows : List Api.DiscoverItem
     , time : Float
@@ -125,6 +126,7 @@ init _ =
       , releases = []
       , reqNotice = Nothing
       , reqLoading = False
+      , reqPollAcc = 0
       , popularMovies = []
       , popularShows = []
       , time = 0

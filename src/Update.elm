@@ -274,13 +274,34 @@ update msg model =
 
                     else
                         model.controlsVisible
+
+                -- m37: poll /Requests every ~5s while on the Requests tab so
+                -- live Deluge progress bars update (skip while an action is
+                -- in flight)
+                onRequests =
+                    model.screen == Requests
+
+                acc0 =
+                    if onRequests then
+                        model.reqPollAcc + delta
+
+                    else
+                        0
+
+                ( acc1, pollCmd ) =
+                    if onRequests && acc0 >= 5000 && not model.reqLoading then
+                        ( 0, Api.fetchRequests model.token GotRequests )
+
+                    else
+                        ( acc0, Cmd.none )
             in
             ( { model
                 | time = model.time + delta * 0.001
                 , idleTime = newIdleTime
                 , controlsVisible = newControlsVisible
+                , reqPollAcc = acc1
               }
-            , Cmd.none
+            , pollCmd
             )
 
         GotViewport vp ->
