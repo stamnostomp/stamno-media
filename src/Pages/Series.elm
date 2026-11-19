@@ -7,9 +7,9 @@ library (server-side Downloaded flag) get a PLAY button; the rest are
 greyed out and not playable. -}
 
 import Api
-import Html exposing (Html, button, div, img, span, text)
-import Html.Attributes exposing (class, src, style)
-import Html.Events exposing (onClick)
+import Html exposing (Html, button, div, img, option, select, span, text)
+import Html.Attributes exposing (class, selected, src, style, value)
+import Html.Events exposing (onClick, onInput)
 import Types exposing (Model, Msg(..), Screen(..))
 
 
@@ -35,6 +35,16 @@ view model =
                     detail
                         |> Maybe.map .seasons
                         |> Maybe.withDefault []
+
+                -- m54: the season shown in the card grid: the selected one,
+                -- else the first
+                selectedSeason =
+                    case model.seriesSeason of
+                        Just n ->
+                            List.head (List.filter (\sn -> sn.seasonNumber == n) seasons)
+
+                        Nothing ->
+                            List.head seasons
             in
             div [ class "pa4" ]
                 [ div [ class "flex items-start gap-5 mb-5" ]
@@ -72,8 +82,27 @@ view model =
                     div [ class "f6 fg-muted" ] [ text "NO EPISODE DATA" ]
 
                   else
-                    div [ class "flex flex-column gap-5" ]
-                        (List.map (seasonSection model title) seasons)
+                    div [ class "flex flex-column gap-4" ]
+                        [ -- m54: season select box (styled like the tracker
+                          -- select on the Requests page)
+                          select
+                            [ class "f6 tracked-wide bg-panel ba b--default fg-primary mb-4"
+                            , style "padding" "8px 12px"
+                            , onInput (\str -> case String.toInt str of
+                                Just n ->
+                                    SetSeriesSeason n
+
+                                Nothing ->
+                                    NoOp)
+                            ]
+                            (List.map (seasonOption selectedSeason) seasons)
+                        , case selectedSeason of
+                            Just sn ->
+                                seasonSection model title sn
+
+                            Nothing ->
+                                text ""
+                        ]
                 ]
 
         _ ->
@@ -179,3 +208,21 @@ findLibraryItem library seriesName season ep =
             )
             library
         )
+
+
+{-| m54: one <option> per season; season 0 is labelled SPECIALS. -}
+seasonOption : Maybe Api.SeriesSeason -> Api.SeriesSeason -> Html Msg
+seasonOption sel sn =
+    let
+        label =
+            if sn.seasonNumber == 0 then
+                "SPECIALS"
+
+            else
+                "SEASON " ++ String.fromInt sn.seasonNumber
+    in
+    option
+        [ value (String.fromInt sn.seasonNumber)
+        , selected (sel == Just sn)
+        ]
+        [ text label ]

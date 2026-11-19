@@ -107,6 +107,7 @@ type alias Model =
     , movieSort : String
     , seriesHits : List Api.SeriesHit
     , seriesDetail : Maybe Api.SeriesDetail
+    , seriesSeason : Maybe Int
     , userMenuOpen : Bool
     , token : Maybe String
     , authUser : Maybe AuthUser
@@ -154,6 +155,7 @@ init _ =
       , movieSort = "az"
       , seriesHits = []
       , seriesDetail = Nothing
+      , seriesSeason = Nothing
       , userMenuOpen = False
       , token = Nothing
       , authUser = Nothing
@@ -183,6 +185,7 @@ type Msg
     | OpenSeries String
     | GotSeriesSearch (Result Http.Error (List Api.SeriesHit))
     | GotSeriesEpisodes (Result Http.Error Api.SeriesDetail)
+    | SetSeriesSeason Int
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | BackFromPlayer

@@ -76,10 +76,26 @@ update msg model =
                     else
                         ( { model | seriesHits = [] }, Cmd.none )
 
+        SetSeriesSeason n ->
+            ( { model | seriesSeason = Just n }, Cmd.none )
+
         GotSeriesEpisodes result ->
             case result of
                 Ok detail ->
-                    ( { model | seriesDetail = Just detail, needsAuth = False }, Cmd.none )
+                    -- m54: default the season box to the season containing
+                    -- the first downloaded episode, else the first season
+                    ( { model
+                        | seriesDetail = Just detail
+                        , seriesSeason =
+                            if model.seriesSeason == Nothing then
+                                defaultSeriesSeason detail.seasons
+
+                            else
+                                model.seriesSeason
+                        , needsAuth = False
+                      }
+                    , Cmd.none
+                    )
 
                 Err err ->
                     if isUnauthorized err then
@@ -556,6 +572,18 @@ upsertContinueWatching item videoState existing =
 
         else
             withoutItem
+
+
+{-| m54: the season to preselect on the series page: the first season that
+has a downloaded episode, else the first season. -}
+defaultSeriesSeason : List Api.SeriesSeason -> Maybe Int
+defaultSeriesSeason seasons =
+    case List.head (List.filter (\s -> List.any .downloaded s.episodes) seasons) of
+        Just s ->
+            Just s.seasonNumber
+
+        Nothing ->
+            List.head seasons |> Maybe.map .seasonNumber
 
 
 {-| True when the server rejected the request for a missing/invalid token
