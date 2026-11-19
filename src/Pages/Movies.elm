@@ -29,8 +29,12 @@ view model =
 
 isMovie : Api.Item -> Bool
 isMovie i =
-    i.itemType == "movie"
-        || (i.itemType == "" && String.startsWith "video/" i.mime && i.seriesName == Nothing)
+    let
+        ty =
+            String.toLower i.itemType
+    in
+    ty == "movie"
+        || (ty == "" && String.startsWith "video/" i.mime && i.seriesName == Nothing)
 
 
 search : String -> List Api.Item -> List Api.Item

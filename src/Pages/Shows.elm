@@ -32,7 +32,7 @@ view model =
 
 isEpisode : Api.Item -> Bool
 isEpisode i =
-    i.itemType == "episode" || i.seriesName /= Nothing
+    String.toLower i.itemType == "episode" || i.seriesName /= Nothing
 
 
 seriesSection : Maybe String -> ( String, List Api.Item ) -> Html Msg
