@@ -112,44 +112,54 @@ viewRequestRow r =
         ]
 
 
-{-| m37: live Deluge progress bar for Downloading requests (server attaches
-Progress/TorrentState from core.get_torrents_status). -}
+{-| m37: live Deluge progress bar (server attaches Progress/TorrentState
+via core.get_torrents_status). m50: the bar renders whenever progress data
+exists OR the request is still Downloading -- so an Imported-but-seeding
+request keeps its bar (SEEDING 100%) next to the IMPORTED badge. -}
 progressElems : Api.RequestEntry -> List (Html Msg)
 progressElems r =
-    case ( r.status, r.progress ) of
-        ( "Downloading", Just p ) ->
-            let
-                pct =
-                    clamp 0 100 p
+    case r.progress of
+        Just p ->
+            [ progressBar (clamp 0 100 p) (progressLabel r (Just (clamp 0 100 p))) ]
 
-                -- m41: at 100% / Seeding the bar reads SEEDING, not DOWNLOADING
-                label =
-                    if pct >= 99.9 || r.torrentState == Just "Seeding" then
-                        "SEEDING 100%"
+        Nothing ->
+            if r.status == "Downloading" then
+                [ progressBar 0 (progressLabel r Nothing) ]
 
-                    else
-                        "DOWNLOADING "
-                            ++ String.fromInt (round pct)
-                            ++ "%"
-            in
-            [ div [ class "flex items-center gap-2" ]
-                [ div
-                    [ class "ba b--default flex-none"
-                    , style "width" "120px"
-                    , style "height" "6px"
-                    ]
-                    [ div
-                        [ class "bg-white h-100"
-                        , style "width" (String.fromFloat pct ++ "%")
-                        ]
-                        []
-                    ]
-                , div [ class "f7 fg-muted ttu tracked-wide" ] [ text label ]
-                ]
+            else
+                []
+
+
+progressLabel : Api.RequestEntry -> Maybe Float -> String
+progressLabel r mp =
+    let
+        pct =
+            Maybe.withDefault 0 mp
+    in
+    -- m41: at 100% / Seeding the bar reads SEEDING, not DOWNLOADING
+    if pct >= 99.9 || r.torrentState == Just "Seeding" then
+        "SEEDING 100%"
+
+    else
+        "DOWNLOADING " ++ String.fromInt (round pct) ++ "%"
+
+
+progressBar : Float -> String -> Html Msg
+progressBar pct label =
+    div [ class "flex items-center gap-2" ]
+        [ div
+            [ class "ba b--default flex-none"
+            , style "width" "120px"
+            , style "height" "6px"
             ]
-
-        _ ->
-            []
+            [ div
+                [ class "bg-white h-100"
+                , style "width" (String.fromFloat pct ++ "%")
+                ]
+                []
+            ]
+        , div [ class "f7 fg-muted ttu tracked-wide" ] [ text label ]
+        ]
 
 
 titleWithYear : Api.RequestEntry -> String

@@ -65,6 +65,7 @@ type alias Item =
     , seriesName : Maybe String
     , itemSeason : Maybe Int
     , itemEpisode : Maybe Int
+    , genres : List String
     }
 
 
@@ -127,30 +128,47 @@ itemEpisodeField =
             ]
         )
 
+
+{-| m53b: genre list from legacy rows (lowercase `genres`) or Jellyfin
+items (PascalCase `Genres`), default []. -}
+itemGenresField : Decoder (List String)
+itemGenresField =
+    Decode.map (Maybe.withDefault [])
+        (Decode.maybe
+            (Decode.oneOf
+                [ Decode.field "genres" (Decode.list Decode.string)
+                , Decode.field "Genres" (Decode.list Decode.string)
+                ]
+            )
+        )
+
 {-| 7-field constructor; itemSeason/itemEpisode are layered on by map2
 (the pinned elm/json has no map9+). -}
 mkItem : String -> String -> Int -> String -> String -> String -> Maybe String -> Item
 mkItem id title size mime displayTitle itemType seriesName =
-    Item id title size mime displayTitle itemType seriesName Nothing Nothing
+    Item id title size mime displayTitle itemType seriesName Nothing Nothing []
 
 
 itemDecoder : Decoder Item
 itemDecoder =
     Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map2 (\i se -> { i | itemSeason = se })
-            (Decode.map2 (\i ep -> { i | itemEpisode = ep })
-                (Decode.map7 mkItem
+        (Decode.map2 (\i gs -> { i | genres = gs })
+            (Decode.map2 (\i se -> { i | itemSeason = se })
+                (Decode.map2 (\i ep -> { i | itemEpisode = ep })
+                    (Decode.map7 mkItem
                     (Decode.field "id" Decode.string)
                     (Decode.field "title" Decode.string)
                     (Decode.field "size" Decode.int)
                     (Decode.field "mime" Decode.string)
                     (Decode.succeed "")
-                    itemTypeField
-                    seriesNameField
+                        itemTypeField
+                        seriesNameField
+                    )
+                    itemEpisodeField
                 )
-                itemEpisodeField
+                itemSeasonField
             )
-            itemSeasonField
+            itemGenresField
         )
         displayTitleField
 

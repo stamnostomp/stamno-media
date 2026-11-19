@@ -148,6 +148,25 @@ update msg model =
         SetFilter filter ->
             ( { model | filter = filter }, Cmd.none )
 
+        SetMovieGenreFilter mg ->
+            ( { model | movieGenreFilter = mg }, Cmd.none )
+
+        CycleMovieSort ->
+            -- az -> za -> new -> az
+            let
+                next =
+                    case model.movieSort of
+                        "az" ->
+                            "za"
+
+                        "za" ->
+                            "new"
+
+                        _ ->
+                            "az"
+            in
+            ( { model | movieSort = next }, Cmd.none )
+
         SetSearch query ->
             ( { model | search = query }, Cmd.none )
 

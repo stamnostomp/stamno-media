@@ -103,6 +103,8 @@ type alias Model =
     , previousScreen : Screen
     , activeRealItem : Maybe Api.Item
     , itemMeta : Maybe Api.ItemMetadata
+    , movieGenreFilter : Maybe String
+    , movieSort : String
     , seriesHits : List Api.SeriesHit
     , seriesDetail : Maybe Api.SeriesDetail
     , userMenuOpen : Bool
@@ -148,6 +150,8 @@ init _ =
       , previousScreen = Home
       , activeRealItem = Nothing
       , itemMeta = Nothing
+      , movieGenreFilter = Nothing
+      , movieSort = "az"
       , seriesHits = []
       , seriesDetail = Nothing
       , userMenuOpen = False
@@ -183,6 +187,8 @@ type Msg
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | BackFromPlayer
     | SetFilter (Maybe Genre)
+    | SetMovieGenreFilter (Maybe String)
+    | CycleMovieSort
     | SetSearch String
     | SetTab Tab
     | GotRequests (Result Http.Error (List Api.RequestEntry))
