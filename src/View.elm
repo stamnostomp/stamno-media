@@ -1,5 +1,6 @@
 module View exposing (view)
 
+import Api
 import Browser
 import Catalog exposing (Title)
 import Html exposing (Html, a, button, div, input, span, text)
@@ -170,7 +171,13 @@ viewHeader model =
             screen == Home && not (String.isEmpty search)
 
         results =
-            Catalog.searchBy search Catalog.catalog
+            List.filter
+                (\i ->
+                    String.contains (String.toLower search)
+                        (String.toLower i.displayTitle)
+                        || String.contains (String.toLower search) (String.toLower i.title)
+                )
+                model.library
     in
     div [ class "sticky-top flex items-center justify-between ph4 bb b--default bg-page", style "height" "64px" ]
         [ div [ class "flex items-center gap-6" ]
@@ -184,7 +191,6 @@ viewHeader model =
                     [ ( "Home", Home )
                     , ( "Movies", Movies )
                     , ( "Shows", Shows )
-                    , ( "Library", Library )
                     , ( "Requests", Requests )
                     ]
                 )
@@ -303,7 +309,7 @@ viewUserMenu model =
         ]
 
 
-viewSearchResults : List Title -> Html Msg
+viewSearchResults : List Api.Item -> Html Msg
 viewSearchResults results =
     if List.isEmpty results then
         div [ class "search-dropdown pa3 f7 fg-muted tracked-wide" ] [ text "NO RESULTS" ]
@@ -313,15 +319,15 @@ viewSearchResults results =
             (List.map searchResultItem results)
 
 
-searchResultItem : Title -> Html Msg
-searchResultItem title =
+searchResultItem : Api.Item -> Html Msg
+searchResultItem item =
     div
         [ class "pointer flex items-center gap-3 pa2"
-        , onClick (OpenDetail title.id)
+        , onClick (OpenRealDetail item)
         ]
-        [ span [ class "fg-ghost b" ] [ text (Catalog.initial title) ]
-        , span [ class "f7 ttu tracked-wide fg-primary" ] [ text title.title ]
-        , span [ class "f7 fg-muted ml-auto" ] [ text (String.fromInt title.year) ]
+        [ span [ class "fg-ghost b" ] [ text (String.left 1 item.displayTitle) ]
+        , span [ class "f7 ttu tracked-wide fg-primary" ] [ text item.displayTitle ]
+        , span [ class "f7 fg-muted ml-auto" ] [ text item.mime ]
         ]
 
 

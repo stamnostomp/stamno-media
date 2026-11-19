@@ -122,11 +122,15 @@ progressElems r =
                 pct =
                     clamp 0 100 p
 
+                -- m41: at 100% / Seeding the bar reads SEEDING, not DOWNLOADING
                 label =
-                    String.toUpper (Maybe.withDefault "DOWNLOADING" r.torrentState)
-                        ++ " "
-                        ++ String.fromInt (round pct)
-                        ++ "%"
+                    if pct >= 99.9 || r.torrentState == Just "Seeding" then
+                        "SEEDING 100%"
+
+                    else
+                        "DOWNLOADING "
+                            ++ String.fromInt (round pct)
+                            ++ "%"
             in
             [ div [ class "flex items-center gap-2" ]
                 [ div

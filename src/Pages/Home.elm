@@ -1,8 +1,8 @@
 module Pages.Home exposing (view)
 
-import Catalog exposing (Title)
+import Api
 import Components exposing (continueWatchingCard, libraryRowCard)
-import Html exposing (Html, button, div, span, text)
+import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, id, style)
 import Html.Events exposing (onClick)
 import Types exposing (Model, Msg(..))
@@ -11,7 +11,7 @@ import Types exposing (Model, Msg(..))
 view : Model -> Html Msg
 view model =
     div []
-        [ viewHero (Catalog.find model.activeId)
+        [ viewHero model
         , div [ class "ph4 pt4 pb5 flex flex-column gap-7" ]
             [ viewMaybeRow "Continue Watching" "row-continue" (continueWatchingCard model.token) model.continueWatching
             , viewMaybeRow "Trending Now" "row-trending" (libraryRowCard model.token) model.popular
@@ -20,32 +20,53 @@ view model =
         ]
 
 
-viewHero : Title -> Html Msg
-viewHero active =
+{-| m41: the hero features the newest server item (GET /new head, falling
+back to the first library item) instead of the hardcoded demo catalog. -}
+heroItem : Model -> Maybe Api.Item
+heroItem model =
+    case model.newItems of
+        (i :: _) ->
+            Just i
+
+        [] ->
+            List.head model.library
+
+
+viewHero : Model -> Html Msg
+viewHero model =
+    let
+        hero =
+            heroItem model
+    in
     div
         [ class "relative hero-bg bb b--default flex items-end pa-7"
         , style "height" "440px"
         ]
-        [ div [ class "flex flex-column gap-3", style "max-width" "640px" ]
-            [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text active.title ]
-            , div [ class "flex items-center gap-3 f6 fg-secondary" ]
-                [ span [] [ text (String.fromInt active.year) ]
-                , span [] [ text "·" ]
-                , span [] [ text active.duration ]
-                , span [] [ text "·" ]
-                , span
-                    [ class "ba b--default ttu tracked-wide"
-                    , style "padding" "2px 8px"
+        (case hero of
+            Nothing ->
+                [ div [ class "flex flex-column gap-3", style "max-width" "640px" ]
+                    [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text "STAMNO_MEDIA" ]
                     ]
-                    [ text (Catalog.genreLabel active.genre) ]
                 ]
-            , div [ class "f5 fg-secondary lh-copy" ] [ text active.synopsis ]
-            , div [ class "flex gap-4 mt3" ]
-                [ button [ class "btn btn-primary", onClick OpenPlayer ] [ text "▶ Play" ]
-                , button [ class "btn btn-ghost", onClick (OpenDetail active.id) ] [ text "More Info" ]
+
+            Just item ->
+                [ div
+                    [ class "absolute absolute--fill"
+                    , style "background-image" ("url(" ++ Api.imageUrl model.token item.id "Backdrop" ++ ")")
+                    , style "background-size" "cover"
+                    , style "background-position" "center"
+                    , style "opacity" "0.35"
+                    ]
+                    []
+                , div [ class "relative flex flex-column gap-3", style "max-width" "640px" ]
+                    [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text item.displayTitle ]
+                    , div [ class "flex gap-4 mt3" ]
+                        [ button [ class "btn btn-primary", onClick (OpenRealPlayer item) ] [ text "Play" ]
+                        , button [ class "btn btn-ghost", onClick (OpenRealDetail item) ] [ text "More Info" ]
+                        ]
+                    ]
                 ]
-            ]
-        ]
+        )
 
 
 {-| Omits the row entirely (rather than showing an empty scroller) when
