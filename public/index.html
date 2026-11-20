@@ -35,7 +35,10 @@
       v.dataset.hlsActive = '0';
       if (src.indexOf('.m3u8') !== -1) {
         if (window.Hls && window.Hls.isSupported()) {
-          var h = new window.Hls();
+          // startPosition 0: the server playlist grows segment-by-segment
+          // (no ENDLIST until the remux finishes) -- without this hls.js
+          // would join at the "live edge" instead of the beginning.
+          var h = new window.Hls({ startPosition: 0, liveSyncDurationCount: 3 });
           h.loadSource(src);
           h.attachMedia(v);
           hlsInstance = h;
