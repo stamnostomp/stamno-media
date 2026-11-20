@@ -221,6 +221,19 @@ viewHeader model =
         ]
 
 
+{-| m61: query-string suffix carrying the auth token for server-rendered
+pages (/dashboard, /api-docs), whose server-side auth gate runs before any
+page JS can read localStorage. -}
+tokenQuery : Maybe String -> String
+tokenQuery mToken =
+    case mToken of
+        Just t ->
+            "?api_key=" ++ t
+
+        Nothing ->
+            ""
+
+
 {-| Top-right user icon: a 28x28 arrow-btn with a monochrome text glyph that
 toggles a small dropdown (Dashboard / API Docs + server caption). Clicking
 outside (transparent fixed overlay) or a menu item closes it.
@@ -279,7 +292,9 @@ viewUserMenu model =
                         [ text caption ]
                     , if showDashboard then
                         a
-                            [ href "/dashboard"
+                            -- m61: carry the token in the URL so the server-side
+                            -- page-auth gate (m58) lets the signed-in user in
+                            [ href ("/dashboard" ++ tokenQuery model.token)
                             , class "db pa2 f7 ttu tracked-wide fg-primary req-row"
                             , style "text-decoration" "none"
                             , onClick CloseUserMenu
@@ -289,7 +304,7 @@ viewUserMenu model =
                       else
                         text ""
                     , a
-                        [ href "/api-docs"
+                        [ href ("/api-docs" ++ tokenQuery model.token)
                         , class "db pa2 f7 ttu tracked-wide fg-primary req-row"
                         , style "text-decoration" "none"
                         , onClick CloseUserMenu
