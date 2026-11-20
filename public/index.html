@@ -146,16 +146,54 @@
     // compute "continue watching". Fire-and-forget, independent of Elm.
     var API_BASE = window.location.origin; // m69: same origin as the page
 
+    // m69: also maintain a playback SESSION so GET /Sessions shows who is
+    // watching right now. Start once per item, ping at most every 10s
+    // (sessions expire server-side after 90s without a ping), stop on end.
+    var sessItem = null, sessId = null, lastPing = 0;
+    function tokenQ() {
+      var t = localStorage.getItem('fmsToken');
+      return t ? '?api_key=' + encodeURIComponent(t) : '';
+    }
+    function sendSession(itemId, stopped) {
+      var now = Date.now();
+      if (stopped) {
+        if (sessId) fetch(API_BASE + '/Sessions/Playing/Stopped' + tokenQ(), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ItemId: itemId, PlaySessionId: sessId })
+        }).catch(function() {});
+        sessItem = null; sessId = null;
+        return;
+      }
+      if (sessItem !== itemId) {
+        sessItem = itemId; sessId = null;
+        fetch(API_BASE + '/Sessions/Playing' + tokenQ(), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ItemId: itemId, PositionSeconds: 0 })
+        }).then(function(r) { return r.json(); })
+          .then(function(s) { if (s && s.Id) sessId = s.Id; })
+          .catch(function() {});
+        lastPing = now;
+        return;
+      }
+      if (sessId && now - lastPing > 10000) {
+        lastPing = now;
+        fetch(API_BASE + '/Sessions/Playing/Ping' + tokenQ(), {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ PlaySessionId: sessId })
+        }).catch(function() {});
+      }
+    }
     function sendProgress() {
       var v = document.getElementById('media-player');
       if (!v || !v.duration || !isFinite(v.duration)) return;
       var itemId = v.dataset.itemId;
       if (!itemId) return;
-      fetch(API_BASE + '/progress', {
+      fetch(API_BASE + '/progress' + tokenQ(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ id: itemId, currentTime: v.currentTime, duration: v.duration })
       }).catch(function() {});
+      sendSession(itemId, false);
     }
 
     setInterval(function() {
@@ -167,7 +205,11 @@
       if (event.target && event.target.id === 'media-player') sendProgress();
     }, true);
     document.addEventListener('ended', function(event) {
-      if (event.target && event.target.id === 'media-player') sendProgress();
+      if (event.target && event.target.id === 'media-player') {
+        sendProgress();
+        var id = event.target.dataset.itemId;
+        if (id) sendSession(id, true);
+      }
     }, true);
   </script>
 </body>
