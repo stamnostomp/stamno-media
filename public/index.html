@@ -54,16 +54,15 @@
         }
       }
     }
+    // Observe the whole subtree for src-attribute changes (Elm re-renders
+    // often enough that a single per-element observer missed the initial
+    // attribute set -- m66f). wireHls is idempotent (hlsSrc/hlsActive
+    // guards), so calling it on every mutation is safe and cheap.
     var playerObserver = new MutationObserver(function() {
       var v = document.getElementById('media-player');
-      if (!v || v.dataset.hlsWatched) return;
-      v.dataset.hlsWatched = '1';
-      new MutationObserver(function(muts) {
-        muts.forEach(function(m) { if (m.attributeName === 'src') wireHls(v); });
-      }).observe(v, { attributes: true, attributeFilter: ['src'] });
-      wireHls(v);
+      if (v) wireHls(v);
     });
-    playerObserver.observe(document.body, { childList: true, subtree: true });
+    playerObserver.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
 
     app.ports.videoCommand.subscribe(function(cmd) {
       var v = document.getElementById('media-player');
