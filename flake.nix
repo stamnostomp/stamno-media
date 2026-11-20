@@ -13,6 +13,13 @@
         sha256 = "10ha7rkf939n84n2zi0swm8q5d85lqgdbzhlrraqkvss5pk1y09j";
       };
 
+      # hls.js for HLS VOD playback (transcode PlayMethod is served as
+      # /videos/<id>/main.m3u8 by the server).
+      hlsJs = pkgs: pkgs.fetchurl {
+        url = "https://unpkg.com/hls.js@1.5.17/dist/hls.min.js";
+        sha256 = "sha256-SEBU6M0D0/bReB+39AK9wxjYpMUn+TOpXGJOJ8yalHA=";
+      };
+
       # Pre-populates ELM_HOME so elm/elm-test-rs run offline in the sandbox.
       elmDeps = pkgs: pkgs.elmPackages.fetchElmDeps {
         elmPackages = import ./elm-srcs.nix;
@@ -52,6 +59,7 @@
             mkdir -p $out
             cp elm.js public/index.html public/stamno.css $out/
             cp ${tachyons pkgs} $out/tachyons.min.css
+            cp ${hlsJs pkgs} $out/hls.min.js
           '';
         };
       });
@@ -101,6 +109,7 @@
             mkdir -p .dev
             ln -sf "$PWD"/public/index.html "$PWD"/public/stamno.css .dev/
             ln -sf ${tachyons pkgs} .dev/tachyons.min.css
+            ln -sf ${hlsJs pkgs} .dev/hls.min.js
             exec ${pkgs.elmPackages.elm-live}/bin/elm-live src/Main.elm \
               --dir=.dev --host=127.0.0.1 --port=8000 \
               --path-to-elm=${pkgs.elmPackages.elm}/bin/elm \

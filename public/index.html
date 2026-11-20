@@ -10,6 +10,7 @@
 <body>
   <div id="app"></div>
   <script src="elm.js"></script>
+  <script src="hls.min.js"></script>
   <script>
     var app = Elm.Main.init({ node: document.getElementById("app") });
     app.ports.storeToken.subscribe(function(t) {
@@ -20,6 +21,41 @@
       var el = document.getElementById(msg.rowId);
       if (el) el.scrollBy({ left: msg.delta, behavior: 'smooth' });
     });
+
+    // HLS playback: when the <video> src is an .m3u8 playlist (the
+    // server's transcode PlayMethod), route it through hls.js (or native
+    // HLS where available) so duration and the seek bar are real.
+    var hlsInstance = null;
+    function wireHls(v) {
+      var src = v.getAttribute('src') || '';
+      if (v.dataset.hlsActive === '1' && src === '') return; // our own removeAttribute
+      if (src === v.dataset.hlsSrc) return;
+      v.dataset.hlsSrc = src;
+      if (hlsInstance) { try { hlsInstance.destroy(); } catch (e) {} hlsInstance = null; }
+      v.dataset.hlsActive = '0';
+      if (src.indexOf('.m3u8') !== -1) {
+        if (window.Hls && window.Hls.isSupported()) {
+          var h = new window.Hls();
+          h.loadSource(src);
+          h.attachMedia(v);
+          hlsInstance = h;
+          v.removeAttribute('src'); // src attr conflicts with MSE
+          v.dataset.hlsActive = '1';
+        } else if (v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl')) {
+          v.dataset.hlsActive = '1'; // native HLS (Safari): keep src
+        }
+      }
+    }
+    var playerObserver = new MutationObserver(function() {
+      var v = document.getElementById('media-player');
+      if (!v || v.dataset.hlsWatched) return;
+      v.dataset.hlsWatched = '1';
+      new MutationObserver(function(muts) {
+        muts.forEach(function(m) { if (m.attributeName === 'src') wireHls(v); });
+      }).observe(v, { attributes: true, attributeFilter: ['src'] });
+      wireHls(v);
+    });
+    playerObserver.observe(document.body, { childList: true, subtree: true });
 
     app.ports.videoCommand.subscribe(function(cmd) {
       var v = document.getElementById('media-player');
