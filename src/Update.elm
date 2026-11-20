@@ -135,6 +135,8 @@ update msg model =
                 | screen = Player
                 , nowPlaying = RealPlaying item
                 , playSrc = Nothing
+                , subtitles = []
+                , ccOn = False
                 , videoState = initialVideoState
                 , controlsVisible = True
                 , idleTime = 0
@@ -146,7 +148,41 @@ update msg model =
                         |> Maybe.map .progress
               }
               -- m33: ask PlaybackInfo whether to direct-play or transcode
-            , Api.fetchPlaybackInfo model.token item.id GotPlaybackInfo
+            , Cmd.batch
+                [ Api.fetchPlaybackInfo model.token item.id GotPlaybackInfo
+                , Api.fetchSubtitles model.token item.id GotSubtitles
+                ]
+            )
+
+        GotSubtitles result ->
+            case result of
+                Ok subs ->
+                    -- m70: default ON for English if present, else the first
+                    -- track; the <track default> attribute shows it initially
+                    ( { model | subtitles = subs, ccOn = True }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | subtitles = [] }, Cmd.none )
+
+        ToggleCC ->
+            -- m70: cycle off -> first track -> off (index = -1 means off)
+            let
+                n =
+                    List.length model.subtitles
+
+                next =
+                    if not model.ccOn then
+                        0
+
+                    else
+                        -1
+            in
+            ( { model | ccOn = not model.ccOn }
+            , Ports.videoCommand { action = "subtitle", value = toFloat next }
             )
 
         GotPlaybackInfo result ->

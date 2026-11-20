@@ -100,6 +100,8 @@ type alias Model =
     , newItems : List Api.Item
     , nowPlaying : NowPlaying
     , playSrc : Maybe String
+    , subtitles : List Api.SubtitleEntry
+    , ccOn : Bool
     , videoState : VideoState
     , controlsVisible : Bool
     , idleTime : Float
@@ -153,6 +155,8 @@ init _ =
       , newItems = []
       , nowPlaying = DemoPlaying
       , playSrc = Nothing
+      , subtitles = []
+      , ccOn = False
       , videoState = initialVideoState
       , controlsVisible = True
       , idleTime = 0
@@ -198,6 +202,8 @@ type Msg
     | SetSeriesSeason Int
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
+    | GotSubtitles (Result Http.Error (List Api.SubtitleEntry))
+    | ToggleCC
     | BackFromPlayer
     | SetFilter (Maybe Genre)
     | SetMovieGenreFilter (Maybe String)

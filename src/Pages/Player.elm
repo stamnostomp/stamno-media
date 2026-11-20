@@ -14,7 +14,7 @@ view model =
     case model.nowPlaying of
         RealPlaying item ->
             -- m32: pass the token so the <video src> can carry api_key=
-            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress
+            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress model.subtitles model.ccOn
 
         DemoPlaying ->
             viewDemo model.activeId
@@ -41,8 +41,8 @@ the video carries a `data-resume-percent` attribute that index.html's JS
 reads once, on `loadedmetadata`, to seek to that position before playback
 is visible to the user.
 -}
-viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> Html Msg
-viewReal item token playSrc videoState controlsVisible maybeResumeProgress =
+viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> List Api.SubtitleEntry -> Bool -> Html Msg
+viewReal item token playSrc videoState controlsVisible maybeResumeProgress subtitles ccOn =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
@@ -64,7 +64,7 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress =
             , style "height" "100%"
             , style "object-fit" "contain"
             ]
-            []
+            (trackNodes token item.id subtitles)
         , viewPauseOverlay videoState.paused
         , div
             [ class "absolute top-0 left-0 w-100 flex items-center justify-between pv3 ph4"
@@ -102,12 +102,63 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress =
                     ]
                 , div [ class "flex items-center gap-5 f6 fg-secondary" ]
                     [ volControl videoState
-                    , span [ class "pointer" ] [ text "CC" ]
+                    , span
+                        [ class "pointer"
+                        , style "opacity" (if ccOn then "1" else "0.4")
+                        , onClick ToggleCC
+                        ]
+                        [ text "CC" ]
                     , span [ class "pointer", onClick VideoFullscreen ] [ text "⛶" ]
                     ]
                 ]
             ]
         ]
+
+
+{-| m70: one <track> element per subtitle source of the item. English is
+the default track when present, else the first source. -}
+trackNodes : Maybe String -> String -> List Api.SubtitleEntry -> List (Html Msg)
+trackNodes token itemId subs =
+    let
+        defaultIndex =
+            case List.head (List.filter (\s -> s.language == Just "eng") subs) of
+                Just s ->
+                    s.index
+
+                Nothing ->
+                    case List.head subs of
+                        Just s ->
+                            s.index
+
+                        Nothing ->
+                            -1
+    in
+    List.map
+        (\s ->
+            Html.node "track"
+                ([ Attr.attribute "kind" "subtitles"
+                 , Attr.attribute "src" (Api.subtitleUrl token itemId s.index)
+                 , Attr.attribute "srclang" (Maybe.withDefault "und" s.language)
+                 , Attr.attribute "label"
+                    (case s.language of
+                        Just l ->
+                            l
+
+                        Nothing ->
+                            Maybe.withDefault ("Sub " ++ String.fromInt s.index) s.file
+                    )
+                 ]
+                    ++ (if s.index == defaultIndex then
+                            [ Attr.attribute "default" "" ]
+
+                        else
+                            []
+                       )
+                )
+                []
+        )
+        subs
+
 
 
 viewPauseOverlay : Bool -> Html Msg

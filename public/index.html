@@ -84,6 +84,13 @@
         case 'skip':
           v.currentTime = Math.max(0, v.currentTime + cmd.value);
           break;
+        case 'subtitle':
+          // m70: show text track #value (Float; -1 = off)
+          var want = Math.round(cmd.value);
+          for (var i = 0; i < v.textTracks.length; i++) {
+            v.textTracks[i].mode = (i === want) ? 'showing' : 'hidden';
+          }
+          break;
         case 'mute':
           v.muted = !v.muted;
           break;

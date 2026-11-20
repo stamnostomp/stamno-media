@@ -39,6 +39,9 @@ module Api exposing
     , itemMetadataDecoder
     , searchIndexers
     , searchIndexersTv
+    , SubtitleEntry
+    , fetchSubtitles
+    , subtitleUrl
     , searchReleases
     , streamUrl
     , transcodingSrc
@@ -406,6 +409,55 @@ playbackInfoDecoder =
     Decode.map2 PlaybackInfo
         (Decode.field "PlayMethod" Decode.string)
         (Decode.maybe (Decode.field "TranscodingUrl" Decode.string))
+
+
+{-| m70: one entry of GET /Items/:id/subtitles (external file or embedded
+stream, both served as WebVTT via /stream/:id/subtitle/:index). -}
+type alias SubtitleEntry =
+    { index : Int
+    , language : Maybe String
+    , file : Maybe String
+    , format : String
+    , embedded : Bool
+    }
+
+
+subtitleEntryDecoder : Decoder SubtitleEntry
+subtitleEntryDecoder =
+    Decode.map5 SubtitleEntry
+        (Decode.field "index" Decode.int)
+        (Decode.maybe (Decode.field "language" Decode.string))
+        (Decode.maybe (Decode.field "file" Decode.string))
+        (Decode.field "format" Decode.string)
+        (Decode.field "embedded" Decode.bool)
+
+
+{-| m70: GET /Items/:id/subtitles - the subtitle sources of an item. -}
+fetchSubtitles : Maybe String -> String -> (Result Http.Error (List SubtitleEntry) -> msg) -> Cmd msg
+fetchSubtitles token itemId toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/items/" ++ itemId ++ "/subtitles"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list subtitleEntryDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m70: VTT URL for one subtitle source (token as api_key query param). -}
+subtitleUrl : Maybe String -> String -> Int -> String
+subtitleUrl token itemId index =
+    baseUrl
+        ++ "/stream/" ++ itemId ++ "/subtitle/" ++ String.fromInt index
+        ++ (case token of
+                Just t ->
+                    "?api_key=" ++ Url.percentEncode t
+
+                Nothing ->
+                    ""
+           )
 
 
 {-| m33: POST /Items/:id/PlaybackInfo (empty JSON body, auth header) so the
