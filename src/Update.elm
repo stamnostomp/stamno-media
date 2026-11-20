@@ -259,14 +259,24 @@ update msg model =
             ( { model | reqQuery = q }, Cmd.none )
 
         SearchReleases ->
-            ( { model | reqLoading = True, reqNotice = Nothing }, searchIndexersCmd model )
+            -- m59: Search shows TMDB result cards for the query (not the
+            -- torrent list yet); clicking a card runs the indexer search
+            ( { model | reqLoading = True, reqNotice = Nothing, releases = [] }
+            , Api.fetchDiscoverSearch model.token model.reqQuery GotDiscoverSearch
+            )
 
         PickPopular item ->
-            -- m26: picking a popular card fills the query and searches all
-            -- enabled indexers (or the selected one) for it
+            -- m26/m59: picking a card (popular or search result) fills the
+            -- query and searches ALL enabled indexers for it
             let
                 model2 =
-                    { model | reqQuery = item.name, reqLoading = True, reqNotice = Nothing }
+                    { model
+                        | reqQuery = item.name
+                        , reqLoading = True
+                        , reqNotice = Nothing
+                        , searchMovies = []
+                        , searchShows = []
+                    }
             in
             ( model2, searchIndexersCmd model2 )
 
@@ -281,6 +291,20 @@ update msg model =
 
                     else
                         ( model, Cmd.none )
+
+        -- m59: Search now fetches TMDB cards; clicking a card (PickPopular)
+        -- runs the indexer search and shows the torrent list
+        GotDiscoverSearch result ->
+            case result of
+                Ok ( movies, shows ) ->
+                    ( { model | searchMovies = movies, searchShows = shows, reqLoading = False, needsAuth = False }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | reqLoading = False }, Cmd.none )
 
         GotReleases result ->
             case result of
@@ -504,6 +528,8 @@ update msg model =
                 , continueWatching = []
                 , popular = []
                 , newItems = []
+                , searchMovies = []
+                , searchShows = []
                 , myRequests = []
                 , trackers = []
                 , releases = []

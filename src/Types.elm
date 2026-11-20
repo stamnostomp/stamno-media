@@ -87,6 +87,8 @@ type alias Model =
     , reqPollAcc : Float
     , popularMovies : List Api.DiscoverItem
     , popularShows : List Api.DiscoverItem
+    , searchMovies : List Api.DiscoverItem
+    , searchShows : List Api.DiscoverItem
     , time : Float
     , resolution : { width : Float, height : Float }
     , library : List Api.Item
@@ -135,6 +137,8 @@ init _ =
       , reqPollAcc = 0
       , popularMovies = []
       , popularShows = []
+      , searchMovies = []
+      , searchShows = []
       , time = 0
       , resolution = { width = 1920, height = 1080 }
       , library = []
@@ -203,6 +207,7 @@ type Msg
     | GotCreateRequest Int (Result Http.Error Api.RequestEntry)
     | ClearReqNotice
     | GotDiscoverPopular (Result Http.Error ( List Api.DiscoverItem, List Api.DiscoverItem ))
+    | GotDiscoverSearch (Result Http.Error ( List Api.DiscoverItem, List Api.DiscoverItem ))
     | PickPopular Api.DiscoverItem
     | ScrollRow String Float
     | Tick Float

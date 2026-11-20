@@ -23,6 +23,7 @@ module Api exposing
     , fetchAuth
     , fetchContinueWatching
     , fetchDiscoverPopular
+    , fetchDiscoverSearch
     , fetchLibrary
     , fetchItemMetadata
     , fetchNew
@@ -740,10 +741,23 @@ discoverItemDecoder =
 envelope. -}
 fetchDiscoverPopular : Maybe String -> (Result Http.Error ( List DiscoverItem, List DiscoverItem ) -> msg) -> Cmd msg
 fetchDiscoverPopular token toMsg =
+    fetchDiscoverSection token "/Discover/Popular" toMsg
+
+
+{-| m59: GET /Discover/Search?q=.. -> (movies, shows), same envelope as
+/Discover/Popular. The Discover tab shows these as TMDB cards; clicking a
+card triggers the indexer (torrent) search for that title. -}
+fetchDiscoverSearch : Maybe String -> String -> (Result Http.Error ( List DiscoverItem, List DiscoverItem ) -> msg) -> Cmd msg
+fetchDiscoverSearch token query toMsg =
+    fetchDiscoverSection token ("/Discover/Search?q=" ++ Url.percentEncode query) toMsg
+
+
+fetchDiscoverSection : Maybe String -> String -> (Result Http.Error ( List DiscoverItem, List DiscoverItem ) -> msg) -> Cmd msg
+fetchDiscoverSection token path toMsg =
     Http.request
         { method = "GET"
         , headers = authHeader token
-        , url = baseUrl ++ "/Discover/Popular"
+        , url = baseUrl ++ path
         , body = Http.emptyBody
         , expect =
             Http.expectJson toMsg

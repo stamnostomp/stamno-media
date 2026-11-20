@@ -240,14 +240,16 @@ viewDiscover model =
         , if model.reqLoading then
             div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "SEARCHING..." ]
 
-          else if String.isEmpty model.reqQuery && List.isEmpty model.releases then
+          else if String.isEmpty model.reqQuery then
             viewPopularSections model
 
-          else if List.isEmpty model.releases then
-            div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "NO RESULTS" ]
+          else if not (List.isEmpty model.releases) then
+            -- m59: a picked card -> torrent list for that title
+            viewReleaseList model
 
           else
-            viewReleaseList model
+            -- m59: the query itself -> TMDB result cards
+            viewSearchSections model
         ]
 
 
@@ -320,6 +322,21 @@ viewPopularSections model =
         [ viewPopularSection "Popular Movies" model.popularMovies
         , viewPopularSection "Popular Shows" model.popularShows
         ]
+
+
+{-| m59: with a query (and no torrent list yet), show the TMDB search
+results as the same poster cards; clicking one runs the indexer search
+for that title and swaps in the torrent list. -}
+viewSearchSections : Model -> Html Msg
+viewSearchSections model =
+    if List.isEmpty model.searchMovies && List.isEmpty model.searchShows then
+        div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "NO RESULTS" ]
+
+    else
+        div []
+            [ viewPopularSection "Movies" model.searchMovies
+            , viewPopularSection "Shows" model.searchShows
+            ]
 
 
 viewPopularSection : String -> List Api.DiscoverItem -> Html Msg
