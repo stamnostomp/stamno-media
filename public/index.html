@@ -28,6 +28,10 @@
     var hlsInstance = null;
     function wireHls(v) {
       var src = v.getAttribute('src') || '';
+      // hls.js attachMedia() sets src to a blob: MSE object URL -- that is
+      // OUR OWN hls instance talking, not a new source; ignore it or we
+      // would tear the player down right after attaching (m66f).
+      if (src.indexOf('blob:') === 0) return;
       if (v.dataset.hlsActive === '1' && src === '') return; // our own removeAttribute
       if (src === v.dataset.hlsSrc) return;
       v.dataset.hlsSrc = src;
