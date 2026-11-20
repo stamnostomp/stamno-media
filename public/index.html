@@ -144,7 +144,7 @@
 
     // Periodically reports playback position to the server so it can
     // compute "continue watching". Fire-and-forget, independent of Elm.
-    var API_BASE = 'http://localhost:8080';
+    var API_BASE = window.location.origin; // m69: same origin as the page
 
     function sendProgress() {
       var v = document.getElementById('media-player');

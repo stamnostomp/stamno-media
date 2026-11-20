@@ -54,9 +54,12 @@ import Json.Encode as Encode
 import Url
 
 
+{-| API base: RELATIVE ("") so every request goes to whatever origin the
+page was served from (m69) -- http://localhost:8080 on this machine, but
+also http://192.168.1.95:8080 from a laptop on the LAN. -}
 baseUrl : String
 baseUrl =
-    "http://localhost:8080"
+    ""
 
 
 type alias Item =
