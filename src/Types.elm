@@ -81,6 +81,8 @@ type alias Model =
     , trackers : List Api.Tracker
     , activeTracker : Maybe String
     , reqQuery : String
+    , reqTmdbId : Maybe Int
+    , reqYear : Maybe Int
     , releases : List Api.Release
     , reqNotice : Maybe String
     , reqLoading : Bool
@@ -132,6 +134,8 @@ init _ =
       , trackers = []
       , activeTracker = Nothing
       , reqQuery = ""
+      , reqTmdbId = Nothing
+      , reqYear = Nothing
       , releases = []
       , reqNotice = Nothing
       , reqLoading = False

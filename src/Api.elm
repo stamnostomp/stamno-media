@@ -560,6 +560,7 @@ searchResultsDecoder =
 type alias CreateRequestPayload =
     { title : String
     , year : Maybe Int
+    , tmdbId : Maybe Int
     , mediaType : Maybe String
     , trackerId : Maybe String
     , release : Maybe String
@@ -584,6 +585,7 @@ encodeCreateRequest p =
     Encode.object <|
         [ ( "Title", Encode.string p.title ) ]
             ++ encodeMaybe "Year" Encode.int p.year
+            ++ encodeMaybe "TmdbId" Encode.int p.tmdbId
             ++ encodeMaybe "Type" Encode.string p.mediaType
             ++ encodeMaybe "TrackerId" Encode.string p.trackerId
             ++ encodeMaybe "Release" Encode.string p.release

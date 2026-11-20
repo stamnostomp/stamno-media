@@ -262,7 +262,7 @@ update msg model =
         SearchReleases ->
             -- m59: Search shows TMDB result cards for the query (not the
             -- torrent list yet); clicking a card runs the indexer search
-            ( { model | reqLoading = True, reqNotice = Nothing, releases = [] }
+            ( { model | reqLoading = True, reqNotice = Nothing, releases = [], reqTmdbId = Nothing, reqYear = Nothing }
             , Api.fetchDiscoverSearch model.token model.reqQuery GotDiscoverSearch
             )
 
@@ -276,6 +276,8 @@ update msg model =
                 model2 =
                     { model
                         | reqQuery = item.name
+                        , reqTmdbId = String.toInt item.id
+                        , reqYear = item.year
                         , reqLoading = True
                         , reqNotice = Nothing
                         , searchMovies = []
@@ -290,6 +292,8 @@ update msg model =
             -- a flat list of every episode torrent
             ( { model
                 | discoverShow = Just item
+                , reqTmdbId = String.toInt item.id
+                , reqYear = item.year
                 , seriesDetail = Nothing
                 , seriesSeason = Nothing
                 , releases = []
@@ -304,6 +308,8 @@ update msg model =
         BackToDiscoverCards ->
             ( { model
                 | discoverShow = Nothing
+                , reqTmdbId = Nothing
+                , reqYear = Nothing
                 , seriesDetail = Nothing
                 , seriesSeason = Nothing
                 , releases = []
@@ -330,7 +336,14 @@ update msg model =
                         (searchQueries seriesName (model.discoverShow |> Maybe.andThen .originalName))
 
                 model2 =
-                    { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
+                    { model
+                        | reqQuery = q
+                        , reqTmdbId = model.discoverShow |> Maybe.andThen (String.toInt << .id)
+                        , reqYear = model.discoverShow |> Maybe.andThen .year
+                        , releases = []
+                        , reqLoading = True
+                        , reqNotice = Nothing
+                    }
             in
             ( model2, Api.searchIndexersTv model.token qs season (Just ep) GotReleases )
 
@@ -345,7 +358,14 @@ update msg model =
                         (searchQueries seriesName (model.discoverShow |> Maybe.andThen .originalName))
 
                 model2 =
-                    { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
+                    { model
+                        | reqQuery = q
+                        , reqTmdbId = model.discoverShow |> Maybe.andThen (String.toInt << .id)
+                        , reqYear = model.discoverShow |> Maybe.andThen .year
+                        , releases = []
+                        , reqLoading = True
+                        , reqNotice = Nothing
+                    }
             in
             ( model2, Api.searchIndexersTv model.token qs season Nothing GotReleases )
 
@@ -396,7 +416,8 @@ update msg model =
 
                         else
                             model.reqQuery
-                    , year = Nothing
+                    , year = model.reqYear
+                    , tmdbId = model.reqTmdbId
                     , mediaType = Just "movie"
                     , trackerId =
                         -- m28: prefer the release's own IndexerId (works when
