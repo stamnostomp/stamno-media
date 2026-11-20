@@ -732,7 +732,11 @@ type alias DiscoverItem =
 
 discoverItemDecoder : Decoder DiscoverItem
 discoverItemDecoder =
-    Decode.map9 DiscoverItem
+    Decode.map8
+        (\id name originalName originalLanguage mediaType year overview vote ->
+            Decode.map (DiscoverItem id name originalName originalLanguage mediaType year overview vote)
+                (Decode.maybe (Decode.field "PosterUrl" Decode.string))
+        )
         (Decode.field "Id" Decode.string)
         (Decode.field "Name" Decode.string)
         (Decode.maybe (Decode.field "OriginalName" Decode.string))
@@ -741,7 +745,7 @@ discoverItemDecoder =
         (Decode.maybe (Decode.field "ProductionYear" Decode.int))
         (Decode.maybe (Decode.field "Overview" Decode.string))
         (Decode.maybe (Decode.field "VoteAverage" Decode.float))
-        (Decode.maybe (Decode.field "PosterUrl" Decode.string))
+        |> Decode.andThen identity
 
 
 {-| GET /Discover/Popular -> (movies, shows) from the {"Movies":..,"Shows":..}
