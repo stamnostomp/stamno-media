@@ -429,7 +429,8 @@ subtitleEntryDecoder =
         (Decode.maybe (Decode.field "language" Decode.string))
         (Decode.maybe (Decode.field "file" Decode.string))
         (Decode.field "format" Decode.string)
-        (Decode.field "embedded" Decode.bool)
+        -- external-file entries omit "embedded" entirely (m70 fix)
+        (Decode.map (Maybe.withDefault False) (Decode.maybe (Decode.field "embedded" Decode.bool)))
 
 
 {-| m70: GET /Items/:id/subtitles - the subtitle sources of an item. -}
