@@ -59,6 +59,46 @@ suite =
                 Decode.decodeString Api.releaseDecoder """{"Title":"NoId"}"""
                     |> Result.toMaybe
                     |> Expect.equal Nothing
+        , test "m66 discoverItemDecoder reads OriginalName + OriginalLanguage" <|
+            \_ ->
+                case Decode.decodeString Api.discoverItemDecoder
+                    """{"Id":"680","Name":"Pan's Labyrinth","OriginalName":"El laberinto del fauno","OriginalLanguage":"es","Type":"Movie","ProductionYear":2006,"Overview":"...","VoteAverage":8.3,"PosterUrl":"/p.jpg"}""" of
+                    Ok item ->
+                        Expect.all
+                            [ \x -> Expect.equal x.id "680"
+                            , \x -> Expect.equal x.name "Pan's Labyrinth"
+                            , \x -> Expect.equal x.originalName (Just "El laberinto del fauno")
+                            , \x -> Expect.equal x.originalLanguage (Just "es")
+                            , \x -> Expect.equal x.mediaType "Movie"
+                            , \x -> Expect.equal x.year (Just 2006)
+                            , \x -> Expect.equal x.vote (Just 8.3)
+                            , \x -> Expect.equal x.posterUrl (Just "/p.jpg")
+                            ]
+                            item
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m66 discoverItemDecoder tolerates missing OriginalName/OriginalLanguage (old server)" <|
+            \_ ->
+                case Decode.decodeString Api.discoverItemDecoder
+                    """{"Id":"550","Name":"Fight Club","Type":"Movie","ProductionYear":1999,"Overview":null,"VoteAverage":8.4,"PosterUrl":null}""" of
+                    Ok item ->
+                        Expect.all
+                            [ \x -> Expect.equal x.originalName Nothing
+                            , \x -> Expect.equal x.originalLanguage Nothing
+                            ]
+                            item
+
+                    Err err ->
+                        Expect.fail (Decode.errorToString err)
+        , test "m66 qParams emits one repeated q param per query, percent-encoded" <|
+            \_ ->
+                Expect.equal
+                    (Api.qParams [ "Pan's Labyrinth", "El laberinto del fauno" ])
+                    "q=Pan's%20Labyrinth&q=El%20laberinto%20del%20fauno"
+        , test "m66 qParams single query has no separator" <|
+            \_ ->
+                Expect.equal (Api.qParams [ "Shrek" ]) "q=Shrek"
               , test "m34 itemMetadataDecoder: full metadata object (lowercase keys)" <|
             \_ ->
                 case Decode.decodeString Api.itemMetadataDecoder

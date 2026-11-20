@@ -14,6 +14,8 @@ module Api exposing
     , SeriesHit
     , SeriesSeason
     , Tracker
+    , discoverItemDecoder
+    , qParams
     , releaseDecoder
     , searchResultsDecoder
     , seriesDetailDecoder
@@ -718,6 +720,8 @@ with a ready-to-use PosterUrl. -}
 type alias DiscoverItem =
     { id : String
     , name : String
+    , originalName : Maybe String
+    , originalLanguage : Maybe String
     , mediaType : String
     , year : Maybe Int
     , overview : Maybe String
@@ -728,9 +732,11 @@ type alias DiscoverItem =
 
 discoverItemDecoder : Decoder DiscoverItem
 discoverItemDecoder =
-    Decode.map7 DiscoverItem
+    Decode.map9 DiscoverItem
         (Decode.field "Id" Decode.string)
         (Decode.field "Name" Decode.string)
+        (Decode.maybe (Decode.field "OriginalName" Decode.string))
+        (Decode.maybe (Decode.field "OriginalLanguage" Decode.string))
         (Decode.field "Type" Decode.string)
         (Decode.maybe (Decode.field "ProductionYear" Decode.int))
         (Decode.maybe (Decode.field "Overview" Decode.string))
@@ -771,28 +777,39 @@ fetchDiscoverSection token path toMsg =
         }
 
 
-{-| GET /Indexers/Search?q=..&type=movie[&indexerId=..] (m26/m28): with
-`Nothing` the server searches ALL enabled indexers; with `Just` only
-that one. The response is the {Results, Errors} envelope (m28). -}
-searchIndexers : Maybe String -> Maybe String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
-searchIndexers token mIndexerId query toMsg =
+{-| GET /Indexers/Search?q=..&q=..&type=movie[&indexerId=..] (m26/m28):
+with `Nothing` the server searches ALL enabled indexers; with `Just`
+only that one. The response is the {Results, Errors} envelope (m28).
+m66: `queries` is a LIST -- one repeated @q=@ param per query (the
+English display title AND the TMDB original title); the server searches
+each and merges the results, so original-language releases (e.g.
+Spanish "El laberinto del fauno" for Pan's Labyrinth) show up too. -}
+searchIndexers : Maybe String -> Maybe String -> List String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchIndexers token mIndexerId queries toMsg =
     searchIndexersUrl token
         (case mIndexerId of
             Just iid ->
-                "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie&indexerId=" ++ Url.percentEncode iid
+                "/Indexers/Search?" ++ qParams queries ++ "&type=movie&indexerId=" ++ Url.percentEncode iid
 
             Nothing ->
-                "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie"
+                "/Indexers/Search?" ++ qParams queries ++ "&type=movie"
         )
         toMsg
 
 
+{-| Repeated @q=<enc>@ params, one per query (m66). -}
+qParams : List String -> String
+qParams queries =
+    String.join "&" (List.map (\q -> "q=" ++ Url.percentEncode q) queries)
+
+
 {-| m60: TV search for one episode or a season pack from the Discover
-tab: @type=tv@ plus torznab @season@/@ep@ params. -}
-searchIndexersTv : Maybe String -> String -> Int -> Maybe Int -> (Result Http.Error (List Release) -> msg) -> Cmd msg
-searchIndexersTv token query season mEp toMsg =
+tab: @type=tv@ plus torznab @season@/@ep@ params. m66: `queries` is a
+list (English series name + original name), each sent as its own @q=. -}
+searchIndexersTv : Maybe String -> List String -> Int -> Maybe Int -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchIndexersTv token queries season mEp toMsg =
     searchIndexersUrl token
-        ("/Indexers/Search?q=" ++ Url.percentEncode query
+        ("/Indexers/Search?" ++ qParams queries
             ++ "&type=tv&season=" ++ String.fromInt season
             ++ (case mEp of
                     Just ep ->

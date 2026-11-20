@@ -268,7 +268,10 @@ update msg model =
 
         PickPopular item ->
             -- m26/m59: picking a card (popular or search result) fills the
-            -- query and searches ALL enabled indexers for it
+            -- query and searches ALL enabled indexers for it.
+            -- m66: search with the display (English) name AND the TMDB
+            -- original title, so original-language releases (e.g. Spanish
+            -- "El laberinto del fauno" for Pan's Labyrinth) are found too
             let
                 model2 =
                     { model
@@ -279,7 +282,7 @@ update msg model =
                         , searchShows = []
                     }
             in
-            ( model2, searchIndexersCmd model2 )
+            ( model2, searchIndexersCmd model2 (searchQueries item.name item.originalName) )
 
         PickShow item ->
             -- m60: a SHOW card in Discover opens the series picker
@@ -314,26 +317,37 @@ update msg model =
             ( { model | releases = [] }, Cmd.none )
 
         DownloadEpisode seriesName season ep ->
-            -- m60: search all indexers for one episode (torznab season/ep)
+            -- m60: search all indexers for one episode (torznab season/ep).
+            -- m66: also search with the show's original title (when the
+            -- picked Discover card carried one) so original-language
+            -- episode releases match too
             let
                 q =
                     seriesName ++ " S" ++ pad2 season ++ "E" ++ pad2 ep
 
+                qs =
+                    List.map (\base -> base ++ " S" ++ pad2 season ++ "E" ++ pad2 ep)
+                        (searchQueries seriesName (model.discoverShow |> Maybe.andThen .originalName))
+
                 model2 =
                     { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
             in
-            ( model2, Api.searchIndexersTv model.token q season (Just ep) GotReleases )
+            ( model2, Api.searchIndexersTv model.token qs season (Just ep) GotReleases )
 
         DownloadSeason seriesName season ->
-            -- m60: season-pack search (no ep param)
+            -- m60: season-pack search (no ep param); m66: original title too
             let
                 q =
                     seriesName ++ " S" ++ pad2 season
 
+                qs =
+                    List.map (\base -> base ++ " S" ++ pad2 season)
+                        (searchQueries seriesName (model.discoverShow |> Maybe.andThen .originalName))
+
                 model2 =
                     { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
             in
-            ( model2, Api.searchIndexersTv model.token q season Nothing GotReleases )
+            ( model2, Api.searchIndexersTv model.token qs season Nothing GotReleases )
 
         GotDiscoverPopular result ->
             case result of
@@ -740,10 +754,30 @@ fetchRequestsData token =
 
 
 {-| m59: the indexer search command - always searches ALL enabled
-indexers server-side (the tracker dropdown was removed). -}
-searchIndexersCmd : Model -> Cmd Msg
-searchIndexersCmd model =
-    Api.searchIndexers model.token Nothing model.reqQuery GotReleases
+indexers server-side (the tracker dropdown was removed). m66: takes the
+list of queries (English name + original title) sent as repeated q
+params; the server merges the results. -}
+searchIndexersCmd : Model -> List String -> Cmd Msg
+searchIndexersCmd model queries =
+    Api.searchIndexers model.token Nothing queries GotReleases
+
+
+{-| m66: the indexer queries for a title: the display (usually English)
+name plus the TMDB original title when it exists and differs -- so
+torrent searches also cover the original language (Pan's Labyrinth ->
+"El laberinto del fauno"). -}
+searchQueries : String -> Maybe String -> List String
+searchQueries name mOriginal =
+    case mOriginal of
+        Just orig ->
+            if String.isEmpty orig || String.toLower orig == String.toLower name then
+                [ name ]
+
+            else
+                [ name, orig ]
+
+        Nothing ->
+            [ name ]
 
 
 httpErrorToString : Http.Error -> String
