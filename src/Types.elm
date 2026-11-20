@@ -197,7 +197,6 @@ type Msg
     | GotRequests (Result Http.Error (List Api.RequestEntry))
     | GotTrackers (Result Http.Error (List Api.Tracker))
     | SetReqQuery String
-    | SetActiveTracker String
     | SearchReleases
     | GotReleases (Result Http.Error (List Api.Release))
     | CreateRelease Api.Release

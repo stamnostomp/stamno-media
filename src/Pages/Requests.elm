@@ -6,8 +6,8 @@ for the Discover tab, POST /Requests to create a request from a release. -}
 
 import Api
 import Components exposing (formatBytes)
-import Html exposing (Html, button, div, img, input, option, select, text)
-import Html.Attributes exposing (class, disabled, placeholder, selected, src, style, value)
+import Html exposing (Html, button, div, img, input, span, text)
+import Html.Attributes exposing (class, disabled, placeholder, src, style, value)
 import Html.Events exposing (onClick, onInput)
 import Types exposing (Model, Msg(..), Tab(..))
 
@@ -217,10 +217,10 @@ statusBadge status =
         [ text (String.toUpper status) ]
 
 
-{-| Discover tab (m26): with an empty query show the TMDB popular movies /
-shows poster grids; with a query, search the selected tracker - or ALL
-enabled indexers when the ALL TRACKERS option is selected - and request a
-release from the results. -}
+{-| Discover tab (m26, m59: no tracker dropdown - searches always go to
+ALL enabled indexers server-side): with an empty query show the TMDB
+popular movies / shows poster grids; with a query, search and list the
+releases as rows. -}
 viewDiscover : Model -> Html Msg
 viewDiscover model =
     div []
@@ -234,15 +234,6 @@ viewDiscover model =
                 , onInput SetReqQuery
                 ]
                 []
-            , select
-                [ class "f6 tracked-wide bg-panel ba b--default fg-primary"
-                , style "padding" "8px 12px"
-                , onInput SetActiveTracker
-                ]
-                (allTrackersOption model.activeTracker
-                    :: List.map (trackerOption model.activeTracker)
-                        (List.filter .enabled model.trackers)
-                )
             , button [ class "btn btn-primary", onClick SearchReleases, disabled model.reqLoading ]
                 [ text "Search" ]
             ]
@@ -256,29 +247,69 @@ viewDiscover model =
             div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "NO RESULTS" ]
 
           else
-            div [ class "grid-fill" ]
-                (List.map releaseCard model.releases)
+            viewReleaseList model
         ]
 
 
-{-| m26: the ALL TRACKERS option (empty value = search every enabled
-indexer server-side). It is the default when no tracker is selected. -}
-allTrackersOption : Maybe String -> Html Msg
-allTrackersOption active =
-    option
-        [ value ""
-        , selected (active == Nothing || active == Just "")
-        ]
-        [ text "ALL TRACKERS" ]
+{-| m59: search results as a list - one row per torrent, much better for
+scanning many results than cards. The server sorts by seeders desc, so
+the first row is the [RECOMMENDED] pick. -}
+viewReleaseList : Model -> Html Msg
+viewReleaseList model =
+    div [ class "flex flex-column bt b--default" ]
+        (List.indexedMap (releaseRow model) model.releases)
 
 
-trackerOption : Maybe String -> Api.Tracker -> Html Msg
-trackerOption active t =
-    option
-        [ value t.id
-        , selected (active == Just t.id)
+releaseRow : Model -> Int -> Api.Release -> Html Msg
+releaseRow model idx rel =
+    div [ class "req-row flex items-center gap-4 pv3 ph2 bb b--default" ]
+        [ div [ class "flex-auto flex flex-column gap-1" ]
+            [ div [ class "flex items-center gap-2" ]
+                [ div [ class "f5 ttu tracked-wide" ] [ text rel.title ]
+                , if idx == 0 then
+                    recommendedTag
+
+                  else
+                    text ""
+                ]
+            , div [ class "f7 fg-muted" ]
+                [ text
+                    (String.join " · "
+                        (List.filter (not << String.isEmpty)
+                            [ sizeText rel.sizeBytes
+                            , seedersText rel.seeders
+                            , trackerName model rel.trackerId
+                            ]
+                        )
+                    )
+                ]
+            ]
+        , div
+            [ class "req-btn tc f7 tracked-wide ttu pointer flex-none"
+            , style "padding" "6px 16px"
+            , onClick (CreateRelease rel)
+            ]
+            [ text "+ REQUEST" ]
         ]
-        [ text t.name ]
+
+
+{-| m59: [RECOMMENDED] tag on the top-seeders result. -}
+recommendedTag : Html Msg
+recommendedTag =
+    span
+        [ class "ba b--strong f7 tracked-wide ttu fg-primary"
+        , style "padding" "2px 8px"
+        ]
+        [ text "[RECOMMENDED]" ]
+
+
+trackerName : Model -> String -> String
+trackerName model tid =
+    model.trackers
+        |> List.filter (\t -> t.id == tid)
+        |> List.head
+        |> Maybe.map .name
+        |> Maybe.withDefault tid
 
 
 {-| m26: with an empty query, show the TMDB popular picks as poster grids;
@@ -357,33 +388,6 @@ voteText mVote =
 
         Nothing ->
             ""
-
-
-releaseCard : Api.Release -> Html Msg
-releaseCard rel =
-    div [ class "relative ba b--default bg-panel overflow-hidden", style "height" "240px" ]
-        [ div
-            [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
-            , style "font-size" "64px"
-            ]
-            [ text (String.left 1 (String.toUpper rel.title)) ]
-        , div
-            [ class "absolute f7 fg-muted"
-            , style "top" "8px"
-            , style "right" "8px"
-            ]
-            [ text (sizeText rel.sizeBytes) ]
-        , div [ class "absolute left-0 right-0 bottom-0 pa2 flex flex-column gap-2 fade-up-strong" ]
-            [ div [ class "f7 ttu tracked-wide", style "min-height" "2.4em" ] [ text rel.title ]
-            , div [ class "f7 fg-muted" ] [ text (seedersText rel.seeders) ]
-            , div
-                [ class "req-btn tc f7 tracked-wide ttu"
-                , style "padding" "6px 0"
-                , onClick (CreateRelease rel)
-                ]
-                [ text "+ Request" ]
-            ]
-        ]
 
 
 seedersText : Maybe Int -> String

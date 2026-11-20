@@ -244,16 +244,9 @@ update msg model =
         GotTrackers result ->
             case result of
                 Ok ts ->
-                    let
-                        active =
-                            case model.activeTracker of
-                                Just _ ->
-                                    model.activeTracker
-
-                                Nothing ->
-                                    ts |> List.filter .enabled |> List.head |> Maybe.map .id
-                    in
-                    ( { model | trackers = ts, activeTracker = active, needsAuth = False }, Cmd.none )
+                    -- m59: no tracker picker anymore - searches always go
+                    -- to ALL enabled indexers, so nothing is pre-selected
+                    ( { model | trackers = ts, activeTracker = Nothing, needsAuth = False }, Cmd.none )
 
                 Err err ->
                     if isUnauthorized err then
@@ -264,10 +257,6 @@ update msg model =
 
         SetReqQuery q ->
             ( { model | reqQuery = q }, Cmd.none )
-
-        SetActiveTracker tid ->
-            -- m26: the empty value (the ALL TRACKERS option) maps to Nothing
-            ( { model | activeTracker = if tid == "" then Nothing else Just tid }, Cmd.none )
 
         SearchReleases ->
             ( { model | reqLoading = True, reqNotice = Nothing }, searchIndexersCmd model )
@@ -658,20 +647,11 @@ fetchRequestsData token =
         ]
 
 
-{-| m26: the indexer search command - with no tracker selected (Nothing or
-the ALL TRACKERS empty option) the server searches ALL enabled indexers. -}
+{-| m59: the indexer search command - always searches ALL enabled
+indexers server-side (the tracker dropdown was removed). -}
 searchIndexersCmd : Model -> Cmd Msg
 searchIndexersCmd model =
-    let
-        tid =
-            case model.activeTracker of
-                Just "" ->
-                    Nothing
-
-                other ->
-                    other
-    in
-    Api.searchIndexers model.token tid model.reqQuery GotReleases
+    Api.searchIndexers model.token Nothing model.reqQuery GotReleases
 
 
 httpErrorToString : Http.Error -> String
