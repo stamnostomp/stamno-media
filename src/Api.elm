@@ -36,6 +36,7 @@ module Api exposing
     , imageUrl
     , itemMetadataDecoder
     , searchIndexers
+    , searchIndexersTv
     , searchReleases
     , streamUrl
     , transcodingSrc
@@ -775,18 +776,37 @@ fetchDiscoverSection token path toMsg =
 that one. The response is the {Results, Errors} envelope (m28). -}
 searchIndexers : Maybe String -> Maybe String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
 searchIndexers token mIndexerId query toMsg =
-    let
-        base =
-            "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie"
+    searchIndexersUrl token
+        (case mIndexerId of
+            Just iid ->
+                "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie&indexerId=" ++ Url.percentEncode iid
 
-        url =
-            case mIndexerId of
-                Just iid ->
-                    base ++ "&indexerId=" ++ Url.percentEncode iid
+            Nothing ->
+                "/Indexers/Search?q=" ++ Url.percentEncode query ++ "&type=movie"
+        )
+        toMsg
 
-                Nothing ->
-                    base
-    in
+
+{-| m60: TV search for one episode or a season pack from the Discover
+tab: @type=tv@ plus torznab @season@/@ep@ params. -}
+searchIndexersTv : Maybe String -> String -> Int -> Maybe Int -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchIndexersTv token query season mEp toMsg =
+    searchIndexersUrl token
+        ("/Indexers/Search?q=" ++ Url.percentEncode query
+            ++ "&type=tv&season=" ++ String.fromInt season
+            ++ (case mEp of
+                    Just ep ->
+                        "&ep=" ++ String.fromInt ep
+
+                    Nothing ->
+                        ""
+               )
+        )
+        toMsg
+
+
+searchIndexersUrl : Maybe String -> String -> (Result Http.Error (List Release) -> msg) -> Cmd msg
+searchIndexersUrl token url toMsg =
     Http.request
         { method = "GET"
         , headers = authHeader token

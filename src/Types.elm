@@ -110,6 +110,7 @@ type alias Model =
     , seriesHits : List Api.SeriesHit
     , seriesDetail : Maybe Api.SeriesDetail
     , seriesSeason : Maybe Int
+    , discoverShow : Maybe Api.DiscoverItem
     , userMenuOpen : Bool
     , token : Maybe String
     , authUser : Maybe AuthUser
@@ -160,6 +161,7 @@ init _ =
       , seriesHits = []
       , seriesDetail = Nothing
       , seriesSeason = Nothing
+      , discoverShow = Nothing
       , userMenuOpen = False
       , token = Nothing
       , authUser = Nothing
@@ -209,6 +211,11 @@ type Msg
     | GotDiscoverPopular (Result Http.Error ( List Api.DiscoverItem, List Api.DiscoverItem ))
     | GotDiscoverSearch (Result Http.Error ( List Api.DiscoverItem, List Api.DiscoverItem ))
     | PickPopular Api.DiscoverItem
+    | PickShow Api.DiscoverItem
+    | BackToDiscoverCards
+    | BackToDiscoverEpisodes
+    | DownloadEpisode String Int Int
+    | DownloadSeason String Int
     | ScrollRow String Float
     | Tick Float
     | GotViewport Dom.Viewport

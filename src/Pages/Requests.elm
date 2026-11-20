@@ -6,9 +6,10 @@ for the Discover tab, POST /Requests to create a request from a release. -}
 
 import Api
 import Components exposing (formatBytes)
-import Html exposing (Html, button, div, img, input, span, text)
-import Html.Attributes exposing (class, disabled, placeholder, src, style, value)
+import Html exposing (Html, button, div, img, input, option, select, span, text)
+import Html.Attributes exposing (class, disabled, placeholder, selected, src, style, value)
 import Html.Events exposing (onClick, onInput)
+import Pages.Series
 import Types exposing (Model, Msg(..), Tab(..))
 
 
@@ -240,12 +241,29 @@ viewDiscover model =
         , if model.reqLoading then
             div [ class "f7 fg-muted ttu tracked-wide pa3" ] [ text "SEARCHING..." ]
 
+          else if not (List.isEmpty model.releases) then
+            -- m59/m60: a picked card (or episode/season DOWNLOAD) -> torrent list
+            div []
+                [ if model.discoverShow /= Nothing then
+                    div [ class "mb3" ]
+                        [ div
+                            [ class "pointer f6 fg-secondary tracked-wide"
+                            , onClick BackToDiscoverEpisodes
+                            ]
+                            [ text "< BACK TO EPISODES" ]
+                        ]
+
+                  else
+                    text ""
+                , viewReleaseList model
+                ]
+
+          else if model.discoverShow /= Nothing then
+            -- m60: a SHOW card -> series picker (seasons/episodes + DOWNLOAD)
+            viewShowPicker model
+
           else if String.isEmpty model.reqQuery then
             viewPopularSections model
-
-          else if not (List.isEmpty model.releases) then
-            -- m59: a picked card -> torrent list for that title
-            viewReleaseList model
 
           else
             -- m59: the query itself -> TMDB result cards
@@ -357,7 +375,15 @@ popularCard item =
     div
         [ class "relative ba b--default bg-panel overflow-hidden pointer"
         , style "height" "240px"
-        , onClick (PickPopular item)
+        , onClick
+            (if item.mediaType == "Series" then
+                -- m60: shows open the episode picker, movies go straight
+                -- to the torrent list
+                PickShow item
+
+             else
+                PickPopular item
+            )
         ]
         [ case item.posterUrl of
             Just url ->
@@ -415,3 +441,139 @@ seedersText mSeeders =
 
         Nothing ->
             ""
+
+
+{-| m60: show picker inside the Discover tab -- same look as the library
+series page (header + season box), but every episode row has a DOWNLOAD
+button on the right (greyed DOWNLOADED when already in the library), plus
+a SEASON PACK button that searches for the whole season. -}
+viewShowPicker : Model -> Html Msg
+viewShowPicker model =
+    let
+        title =
+            model.discoverShow
+                |> Maybe.map .name
+                |> Maybe.withDefault ""
+
+        seasons =
+            model.seriesDetail
+                |> Maybe.map .seasons
+                |> Maybe.withDefault []
+
+        selectedSeason =
+            case model.seriesSeason of
+                Just n ->
+                    List.head (List.filter (\sn -> sn.seasonNumber == n) seasons)
+
+                Nothing ->
+                    List.head seasons
+    in
+    div []
+        [ div [ class "flex items-center gap-4 mb4" ]
+            [ div
+                [ class "pointer f6 fg-secondary tracked-wide ttu"
+                , onClick BackToDiscoverCards
+                ]
+                [ text "< BACK" ]
+            , div [ class "text-xl ttu tracked-wide fg-primary" ] [ text (String.toUpper title) ]
+            ]
+        , Pages.Series.seriesHeaderView model title
+        , if List.isEmpty seasons then
+            div [ class "f6 fg-muted" ] [ text "NO EPISODE DATA" ]
+
+          else
+            div [ class "flex flex-column gap-4" ]
+                [ select
+                    [ class "f6 tracked-wide bg-panel ba b--default fg-primary mb-4"
+                    , style "padding" "8px 12px"
+                    , onInput
+                        (\str ->
+                            case String.toInt str of
+                                Just n ->
+                                    SetSeriesSeason n
+
+                                Nothing ->
+                                    NoOp
+                        )
+                    ]
+                    (List.map (seasonOption selectedSeason) seasons)
+                , case selectedSeason of
+                    Just sn ->
+                        discoverSeasonSection model title sn
+
+                    Nothing ->
+                        text ""
+                ]
+        ]
+
+
+seasonOption : Maybe Api.SeriesSeason -> Api.SeriesSeason -> Html Msg
+seasonOption sel sn =
+    option
+        [ value (String.fromInt sn.seasonNumber)
+        , selected (Maybe.withDefault (-1) (Maybe.map .seasonNumber sel) == sn.seasonNumber)
+        ]
+        [ text (Maybe.withDefault ("SEASON " ++ String.fromInt sn.seasonNumber) sn.name) ]
+
+
+discoverSeasonSection : Model -> String -> Api.SeriesSeason -> Html Msg
+discoverSeasonSection model seriesName season =
+    let
+        heading =
+            Maybe.withDefault ("SEASON " ++ String.fromInt season.seasonNumber) season.name
+    in
+    div []
+        [ div [ class "flex items-center justify-between mb3" ]
+            [ div [ class "f6 tracked-wider ttu fg-secondary" ] [ text heading ]
+            , div
+                [ class "req-btn tc f7 tracked-wide ttu pointer flex-none"
+                , style "padding" "4px 12px"
+                , onClick (DownloadSeason seriesName season.seasonNumber)
+                ]
+                [ text "SEASON PACK" ]
+            ]
+        , div [ class "flex flex-column bt b--default" ]
+            (List.map (discoverEpisodeRow seriesName season.seasonNumber) season.episodes)
+        ]
+
+
+discoverEpisodeRow : String -> Int -> Api.SeriesEpisode -> Html Msg
+discoverEpisodeRow seriesName season ep =
+    let
+        label =
+            "S" ++ pad2 season ++ "E" ++ pad2 ep.episodeNumber
+    in
+    div [ class "req-row flex items-center gap-4 pv3 ph2 bb b--default" ]
+        [ div
+            [ class "flex-none f7 ttu tracked-wide fg-secondary"
+            , style "min-width" "72px"
+            ]
+            [ text label ]
+        , div [ class "flex-auto flex flex-column gap-1" ]
+            [ div [ class "f5 fg-primary" ] [ text (Maybe.withDefault "(untitled)" ep.name) ]
+            , div [ class "f7 fg-muted" ] [ text (Maybe.withDefault "" ep.airDate) ]
+            ]
+        , if ep.downloaded then
+            div
+                [ class "ba b--default b--dashed f7 tracked-wide ttu fg-muted flex-none"
+                , style "padding" "4px 12px"
+                ]
+                [ text "DOWNLOADED" ]
+
+          else
+            div
+                [ class "req-btn tc f7 tracked-wide ttu pointer flex-none"
+                , style "padding" "6px 16px"
+                , onClick (DownloadEpisode seriesName season ep.episodeNumber)
+                ]
+                [ text "DOWNLOAD" ]
+        ]
+
+
+pad2 : Int -> String
+pad2 n =
+    if n < 10 then
+        "0" ++ String.fromInt n
+
+    else
+        String.fromInt n

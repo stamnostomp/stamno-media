@@ -117,6 +117,7 @@ update msg model =
 
                             else
                                 model.seriesSeason
+                        , reqLoading = False
                         , needsAuth = False
                       }
                     , Cmd.none
@@ -279,6 +280,60 @@ update msg model =
                     }
             in
             ( model2, searchIndexersCmd model2 )
+
+        PickShow item ->
+            -- m60: a SHOW card in Discover opens the series picker
+            -- (season box + episode rows with DOWNLOAD buttons) instead of
+            -- a flat list of every episode torrent
+            ( { model
+                | discoverShow = Just item
+                , seriesDetail = Nothing
+                , seriesSeason = Nothing
+                , releases = []
+                , searchMovies = []
+                , searchShows = []
+                , reqLoading = True
+                , reqNotice = Nothing
+              }
+            , Api.fetchSeriesSearch model.token item.name GotSeriesSearch
+            )
+
+        BackToDiscoverCards ->
+            ( { model
+                | discoverShow = Nothing
+                , seriesDetail = Nothing
+                , seriesSeason = Nothing
+                , releases = []
+                , searchMovies = []
+                , searchShows = []
+              }
+            , Cmd.none
+            )
+
+        BackToDiscoverEpisodes ->
+            ( { model | releases = [] }, Cmd.none )
+
+        DownloadEpisode seriesName season ep ->
+            -- m60: search all indexers for one episode (torznab season/ep)
+            let
+                q =
+                    seriesName ++ " S" ++ pad2 season ++ "E" ++ pad2 ep
+
+                model2 =
+                    { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
+            in
+            ( model2, Api.searchIndexersTv model.token q season (Just ep) GotReleases )
+
+        DownloadSeason seriesName season ->
+            -- m60: season-pack search (no ep param)
+            let
+                q =
+                    seriesName ++ " S" ++ pad2 season
+
+                model2 =
+                    { model | reqQuery = q, releases = [], reqLoading = True, reqNotice = Nothing }
+            in
+            ( model2, Api.searchIndexersTv model.token q season Nothing GotReleases )
 
         GotDiscoverPopular result ->
             case result of
@@ -530,6 +585,8 @@ update msg model =
                 , newItems = []
                 , searchMovies = []
                 , searchShows = []
+                , discoverShow = Nothing
+                , seriesDetail = Nothing
                 , myRequests = []
                 , trackers = []
                 , releases = []
@@ -628,6 +685,15 @@ upsertContinueWatching item videoState existing =
 
 {-| m54: the season to preselect on the series page: the first season that
 has a downloaded episode, else the first season. -}
+pad2 : Int -> String
+pad2 n =
+    if n < 10 then
+        "0" ++ String.fromInt n
+
+    else
+        String.fromInt n
+
+
 defaultSeriesSeason : List Api.SeriesSeason -> Maybe Int
 defaultSeriesSeason seasons =
     case List.head (List.filter (\s -> List.any .downloaded s.episodes) seasons) of
