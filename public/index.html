@@ -38,11 +38,16 @@
           // startPosition 0: the server playlist grows segment-by-segment
           // (no ENDLIST until the remux finishes) -- without this hls.js
           // would join at the "live edge" instead of the beginning.
+          // The element may still have an in-flight NATIVE load of the
+          // previous src (Elm sets the src attribute before we run), and
+          // that pending load clobbers the MSE attach -- so abort it
+          // first: drop the attribute and reset the element with load().
+          v.removeAttribute('src');
+          v.load();
           var h = new window.Hls({ startPosition: 0, liveSyncDurationCount: 3 });
           h.loadSource(src);
           h.attachMedia(v);
           hlsInstance = h;
-          v.removeAttribute('src'); // src attr conflicts with MSE
           v.dataset.hlsActive = '1';
         } else if (v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl')) {
           v.dataset.hlsActive = '1'; // native HLS (Safari): keep src
