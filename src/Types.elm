@@ -7,7 +7,6 @@ module Types exposing
     , Tab(..)
     , VideoState
     , findLibraryItem
-    , introRange
     , nextEpisodeItem
     , init
     , initialVideoState
@@ -104,7 +103,7 @@ type alias Model =
     , nowPlaying : NowPlaying
     , playSrc : Maybe String
     , subtitles : List Api.SubtitleEntry
-    , chapters : List Api.Chapter
+    , intro : Maybe ( Float, Float )
     , ccOn : Bool
     , videoState : VideoState
     , controlsVisible : Bool
@@ -160,7 +159,7 @@ init _ =
       , nowPlaying = DemoPlaying
       , playSrc = Nothing
       , subtitles = []
-      , chapters = []
+      , intro = Nothing
       , ccOn = False
       , videoState = initialVideoState
       , controlsVisible = True
@@ -208,7 +207,7 @@ type Msg
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | GotSubtitles (Result Http.Error (List Api.SubtitleEntry))
-    | GotChapters (Result Http.Error (List Api.Chapter))
+    | GotIntro (Result Http.Error (Maybe ( Float, Float )))
     | SkipIntro
     | PlayNextEpisode
     | ToggleCC
@@ -278,52 +277,6 @@ findLibraryItem library seriesName season ep =
             )
             library
         )
-
-
-{-| m74: the intro range of an item as (startSeconds, endSeconds), if any.
-A chapter NAMED "intro"/"opening" wins (real chapter markers); otherwise,
-for episodes longer than 10 minutes whose first chapter starts at 0 (the
-server falls back to evenly spaced unnamed chapters), the first chapter is
-treated as the intro. -}
-introRange : Bool -> List Api.Chapter -> Float -> Maybe (Float, Float)
-introRange isEpisode chapters duration =
-    let
-        secs c =
-            toFloat c.startPositionTicks / 1e7
-
-        isIntroName n =
-            let
-                l =
-                    String.toLower n
-            in
-            String.contains "intro" l || String.contains "opening" l
-
-        chapterEnd c =
-            case List.head (List.filter (\n -> secs n > secs c) chapters) of
-                Just n ->
-                    secs n
-
-                Nothing ->
-                    duration
-
-        named =
-            List.filter (\c -> Maybe.withDefault False (Maybe.map isIntroName c.name)) chapters
-    in
-    case named of
-        (c :: _) ->
-            Just (secs c, chapterEnd c)
-
-        [] ->
-            case chapters of
-                (c :: _) ->
-                    if isEpisode && duration > 600 && secs c <= 0.001 then
-                        Just (0, chapterEnd c)
-
-                    else
-                        Nothing
-
-                _ ->
-                    Nothing
 
 
 {-| m74: the next DOWNLOADED episode of the same series after the given

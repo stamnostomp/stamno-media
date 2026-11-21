@@ -50,32 +50,6 @@ ch ticks name =
 suite : Test
 suite =
     describe "Player helpers (m74: skip intro + next episode)"
-        [ describe "introRange"
-            [ test "named intro chapter wins" <|
-                \_ ->
-                    Types.introRange True [ ch 0 Nothing, ch 900000000 (Just "Intro"), ch 18000000000 Nothing ] 1320
-                        |> Expect.equal (Just (90, 1800))
-            , test "opening credits also match" <|
-                \_ ->
-                    Types.introRange True [ ch 0 (Just "Opening Credits"), ch 600000000 Nothing ] 1320
-                        |> Expect.equal (Just (0, 60))
-            , test "unnamed chapters: long episode treats first chapter as intro" <|
-                \_ ->
-                    Types.introRange True [ ch 0 Nothing, ch 1320000000 Nothing ] 1320
-                        |> Expect.equal (Just (0, 132))
-            , test "unnamed chapters: short video gets no intro" <|
-                \_ ->
-                    Types.introRange True [ ch 0 Nothing, ch 3000000000 Nothing ] 300
-                        |> Expect.equal Nothing
-            , test "movies do not get the first-chapter heuristic" <|
-                \_ ->
-                    Types.introRange False [ ch 0 Nothing, ch 1320000000 Nothing ] 1320
-                        |> Expect.equal Nothing
-            , test "no chapters at all" <|
-                \_ ->
-                    Types.introRange True [] 1320
-                        |> Expect.equal Nothing
-            ]
         , describe "nextEpisodeItem"
             [ test "next downloaded episode in the same season" <|
                 \_ ->

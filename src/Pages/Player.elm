@@ -6,7 +6,7 @@ import Html exposing (Html, div, input, span, text)
 import Html.Attributes as Attr exposing (autoplay, class, id, src, style)
 import Html.Events as Events exposing (onClick)
 import Json.Decode as Decode
-import Types exposing (Model, Msg(..), NowPlaying(..), VideoState, introRange, nextEpisodeItem)
+import Types exposing (Model, Msg(..), NowPlaying(..), VideoState, nextEpisodeItem)
 
 
 view : Model -> Html Msg
@@ -15,7 +15,7 @@ view model =
         RealPlaying item ->
             -- m32: pass the token so the <video src> can carry api_key=
             -- m74: skip-intro range + next downloaded episode for episodes
-            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress model.subtitles model.ccOn model.chapters (nextEpisodeItem model.library model.seriesDetail item)
+            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress model.subtitles model.ccOn model.intro (nextEpisodeItem model.library model.seriesDetail item)
 
         DemoPlaying ->
             viewDemo model.activeId
@@ -42,8 +42,8 @@ the video carries a `data-resume-percent` attribute that index.html's JS
 reads once, on `loadedmetadata`, to seek to that position before playback
 is visible to the user.
 -}
-viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> List Api.SubtitleEntry -> Bool -> List Api.Chapter -> Maybe Api.Item -> Html Msg
-viewReal item token playSrc videoState controlsVisible maybeResumeProgress subtitles ccOn chapters nextEp =
+viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> List Api.SubtitleEntry -> Bool -> Maybe ( Float, Float ) -> Maybe Api.Item -> Html Msg
+viewReal item token playSrc videoState controlsVisible maybeResumeProgress subtitles ccOn intro nextEp =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
@@ -67,7 +67,7 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress subti
             ]
             (trackNodes token item.id subtitles)
         , viewPauseOverlay videoState.paused
-        , viewSkipIntro item chapters videoState
+        , viewSkipIntro intro videoState
         , viewNextEpisodeOverlay nextEp videoState
         , div
             [ class "absolute top-0 left-0 w-100 flex items-center justify-between pv3 ph4"
@@ -440,18 +440,13 @@ viewDemo activeId =
 
 
 
-{-| m74: "SKIP INTRO ▸" button while the playhead is inside the intro
-range (named intro/opening chapter, or the first chapter of long episodes
-with unnamed fallback chapters). -}
-viewSkipIntro : Api.Item -> List Api.Chapter -> VideoState -> Html Msg
-viewSkipIntro item chapters videoState =
-    let
-        isEp =
-            String.toLower item.itemType == "episode"
-    in
-    case introRange isEp chapters videoState.duration of
+{-| m75: the "SKIP INTRO" button while the playhead is inside the intro
+range reported by the server (GET /Items/:id/Intro). Plain label only. -}
+viewSkipIntro : Maybe ( Float, Float ) -> VideoState -> Html Msg
+viewSkipIntro intro videoState =
+    case intro of
         Just ( start, end ) ->
-            if videoState.currentTime >= start && videoState.currentTime < end - 1.5 && videoState.duration > 0 then
+            if videoState.duration > 0 && videoState.currentTime >= start && videoState.currentTime < end - 1.5 then
                 div
                     [ class "absolute"
                     , style "right" "28px"
@@ -463,7 +458,7 @@ viewSkipIntro item chapters videoState =
                         , style "padding" "8px 16px"
                         , onClick SkipIntro
                         ]
-                        [ text ("SKIP INTRO ▸ " ++ formatTime end) ]
+                        [ text "SKIP INTRO" ]
                     ]
 
             else

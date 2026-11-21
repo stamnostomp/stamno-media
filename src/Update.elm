@@ -136,7 +136,7 @@ update msg model =
                 , nowPlaying = RealPlaying item
                 , playSrc = Nothing
                 , subtitles = []
-                , chapters = []
+                , intro = Nothing
                 , ccOn = False
                 , videoState = initialVideoState
                 , controlsVisible = True
@@ -152,7 +152,7 @@ update msg model =
             , Cmd.batch
                 [ Api.fetchPlaybackInfo model.token item.id GotPlaybackInfo
                 , Api.fetchSubtitles model.token item.id GotSubtitles
-                , Api.fetchChapters model.token item.id GotChapters
+                , Api.fetchIntro model.token item.id GotIntro
                 , -- m74: next-episode needs the series payload; fetch it when
                   -- the player was not opened from the series page
                   if isEpisodeItem item && not (seriesDetailMatches model item) then
@@ -177,25 +177,21 @@ update msg model =
                     else
                         ( { model | subtitles = [] }, Cmd.none )
 
-        GotChapters result ->
+        GotIntro result ->
             case result of
-                Ok chs ->
-                    ( { model | chapters = chs }, Cmd.none )
+                Ok mi ->
+                    ( { model | intro = mi }, Cmd.none )
 
                 Err err ->
                     if isUnauthorized err then
                         ( { model | needsAuth = True }, Cmd.none )
 
                     else
-                        ( { model | chapters = [] }, Cmd.none )
+                        ( { model | intro = Nothing }, Cmd.none )
 
         SkipIntro ->
-            -- m74: jump to the end of the intro range
-            let
-                isEp =
-                    nowPlayingItem model |> Maybe.map isEpisodeItem |> Maybe.withDefault False
-            in
-            case Types.introRange isEp model.chapters model.videoState.duration of
+            -- m75: jump to the end of the intro range
+            case model.intro of
                 Just ( _, end ) ->
                     ( model, Ports.videoCommand { action = "seek", value = end } )
 

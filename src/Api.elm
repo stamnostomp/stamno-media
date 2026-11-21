@@ -39,9 +39,8 @@ module Api exposing
     , itemMetadataDecoder
     , searchIndexers
     , searchIndexersTv
-    , Chapter
     , SubtitleEntry
-    , fetchChapters
+    , fetchIntro
     , fetchSubtitles
     , subtitleUrl
     , searchReleases
@@ -435,32 +434,25 @@ subtitleEntryDecoder =
         (Decode.map (Maybe.withDefault False) (Decode.maybe (Decode.field "embedded" Decode.bool)))
 
 
-{-| m74: one chapter of GET /Items/:id/Chapters. The name (when the file
-carries named chapters, e.g. "Intro") drives the player's skip-intro. -}
-type alias Chapter =
-    { index : Int
-    , startPositionTicks : Int
-    , name : Maybe String
-    }
+{-| m75: GET /Items/:id/Intro - the intro marker of an item as
+(startSeconds, endSeconds), or nulls when none is detectable. -}
+introDecoder : Decoder (Maybe ( Float, Float ))
+introDecoder =
+    Decode.map2 (\s e -> Maybe.map2 (\a b -> ( a / 1e7, b / 1e7 )) s e)
+        (Decode.maybe (Decode.field "StartPositionTicks" (Decode.map toFloat Decode.int)))
+        (Decode.maybe (Decode.field "EndPositionTicks" (Decode.map toFloat Decode.int)))
 
 
-chapterDecoder : Decoder Chapter
-chapterDecoder =
-    Decode.map3 Chapter
-        (Decode.field "Index" Decode.int)
-        (Decode.field "StartPositionTicks" Decode.int)
-        (Decode.maybe (Decode.field "Name" Decode.string))
-
-
-{-| m74: GET /Items/:id/Chapters - chapter markers of an item. -}
-fetchChapters : Maybe String -> String -> (Result Http.Error (List Chapter) -> msg) -> Cmd msg
-fetchChapters token itemId toMsg =
+{-| m75: GET /Items/:id/Intro - intro range in seconds (Nothing when the
+server found no intro). -}
+fetchIntro : Maybe String -> String -> (Result Http.Error (Maybe ( Float, Float )) -> msg) -> Cmd msg
+fetchIntro token itemId toMsg =
     Http.request
         { method = "GET"
         , headers = authHeader token
-        , url = baseUrl ++ "/Items/" ++ itemId ++ "/Chapters"
+        , url = baseUrl ++ "/Items/" ++ itemId ++ "/Intro"
         , body = Http.emptyBody
-        , expect = Http.expectJson toMsg (Decode.list chapterDecoder)
+        , expect = Http.expectJson toMsg introDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
