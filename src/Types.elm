@@ -128,6 +128,11 @@ type alias Model =
     , loginUser : String
     , loginPass : String
     , loginError : Maybe String
+    , metaPickerFor : Maybe Api.Item
+    , metaQuery : String
+    , metaResults : List Api.RemoteSearchResult
+    , metaBusy : Bool
+    , metaNote : Maybe String
     }
 
 
@@ -187,6 +192,11 @@ init _ =
       , loginUser = ""
       , loginPass = ""
       , loginError = Nothing
+      , metaPickerFor = Nothing
+      , metaQuery = ""
+      , metaResults = []
+      , metaBusy = False
+      , metaNote = Nothing
       }
     , Cmd.batch
         [ Task.perform GotViewport Dom.getViewport
@@ -206,6 +216,13 @@ type Msg
     | OpenPlayer
     | OpenRealDetail Api.Item
     | GotItemMetadata (Result Http.Error Api.ItemMetadata)
+    | OpenMetaPicker Api.Item
+    | CloseMetaPicker
+    | SetMetaQuery String
+    | MetaSearchSubmit
+    | GotRemoteSearch (Result Http.Error (List Api.RemoteSearchResult))
+    | PickTmdb Api.RemoteSearchResult
+    | GotSetTmdb (Result Http.Error Api.ItemMetadata)
     | OpenSeries String
     | GotSeriesSearch (Result Http.Error (List Api.SeriesHit))
     | GotSeriesEpisodes (Result Http.Error Api.SeriesDetail)

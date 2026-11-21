@@ -2,9 +2,9 @@ module Pages.RealDetail exposing (view)
 
 import Api
 import Components exposing (formatBytes, libraryRowCard, posterImage)
-import Html exposing (Html, button, div, span, text)
-import Html.Attributes exposing (class, disabled, style)
-import Html.Events exposing (onClick)
+import Html exposing (Html, button, div, input, span, text)
+import Html.Attributes exposing (class, disabled, placeholder, style, value)
+import Html.Events exposing (onClick, onInput)
 import Pages.Series
 import Types exposing (Model, Msg(..))
 
@@ -59,7 +59,16 @@ seriesDetailView model item seriesName =
         , div [ class "ph4" ]
             [ Pages.Series.seriesHeaderView model title ]
         , div [ class "flex gap-4 ph4 pb4 justify-end" ]
-            [ button
+            [ if isAdmin model then
+                button
+                    [ class "btn"
+                    , onClick (OpenMetaPicker item)
+                    ]
+                    [ text "METADATA" ]
+
+              else
+                text ""
+            , button
                 [ class "btn btn-primary"
                 , disabled (mTarget == Nothing)
                 , onClick (Maybe.withDefault (OpenRealPlayer item) (Maybe.map OpenRealPlayer mTarget))
@@ -73,6 +82,11 @@ seriesDetailView model item seriesName =
                     )
                 ]
             ]
+        , if isMetaPickerFor model item then
+            div [ class "ph4 pb4" ] [ metaPickerView model ]
+
+          else
+            text ""
         , div [ class "ph4 pb5" ]
             [ Pages.Series.seriesEpisodesView model title ]
         , div [ class "ph4 pb5" ]
@@ -187,7 +201,21 @@ itemDetailView model item =
                                         "▶ Play"
                                     )
                                 ]
+                            , if isAdmin model then
+                                button
+                                    [ class "btn"
+                                    , onClick (OpenMetaPicker item)
+                                    ]
+                                    [ text "METADATA" ]
+
+                              else
+                                text ""
                             ]
+                        , if isMetaPickerFor model item then
+                            metaPickerView model
+
+                          else
+                            text ""
                         ]
                     ]
                 , div [ class "ph4 pv5" ]
@@ -244,3 +272,68 @@ viewProgress maybeProgress =
                         []
                     ]
                 ]
+
+isAdmin : Model -> Bool
+isAdmin model =
+    Maybe.map .isAdmin model.authUser == Just True
+
+
+isMetaPickerFor : Model -> Api.Item -> Bool
+isMetaPickerFor model item =
+    case model.metaPickerFor of
+        Just p ->
+            p.id == item.id
+
+        Nothing ->
+            False
+
+
+{-| m83: admin manual TMDB override panel - search TMDB, pick the right hit. -}
+metaPickerView : Model -> Html Msg
+metaPickerView model =
+    div [ class "ba b--default bg-panel pa3 flex flex-column gap-3", style "max-width" "640px" ]
+        [ div [ class "flex gap-2 items-center" ]
+            [ input
+                [ class "f6 flex-auto"
+                , placeholder "SEARCH TMDB..."
+                , value model.metaQuery
+                , onInput SetMetaQuery
+                ]
+                []
+            , button
+                [ class "btn btn-primary"
+                , disabled model.metaBusy
+                , onClick MetaSearchSubmit
+                ]
+                [ text (if model.metaBusy then "..." else "SEARCH") ]
+            , button [ class "btn", onClick CloseMetaPicker ] [ text "CLOSE" ]
+            ]
+        , case model.metaNote of
+            Just n ->
+                div [ class "f7 fg-muted" ] [ text n ]
+
+            Nothing ->
+                text ""
+        , div [ class "flex flex-column gap-2" ]
+            (List.map metaResultRow model.metaResults)
+        ]
+
+
+metaResultRow : Api.RemoteSearchResult -> Html Msg
+metaResultRow r =
+    button
+        [ class "btn ba b--default tl w-100"
+        , onClick (PickTmdb r)
+        ]
+        [ text
+            (r.name
+                ++ (case r.year of
+                        Just y ->
+                            " (" ++ String.fromInt y ++ ")"
+
+                        Nothing ->
+                            ""
+                   )
+                ++ "  -  tmdb:" ++ String.fromInt r.tmdbId
+            )
+        ]

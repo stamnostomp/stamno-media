@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+
+<helmet>
+  <link rel="stylesheet" href="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/tokens/colors.css">
+  <link rel="stylesheet" href="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/tokens/typography.css">
+  <link rel="stylesheet" href="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/tokens/spacing.css">
+  <link rel="stylesheet" href="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/tokens/effects.css">
+  <link rel="stylesheet" href="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/styles.css">
+  <script src="_ds/stamno-design-system-ce041970-ab1c-494c-b11a-f5156c054572/_ds_bundle.js"></script>
+  <style>
+    body{margin:0;background:var(--black);}
+    a{color:var(--link);} a:hover{color:var(--link-hover);}
+    ::-webkit-scrollbar{height:8px;width:8px} ::-webkit-scrollbar-thumb{background:var(--scrollbar-thumb)} ::-webkit-scrollbar-track{background:var(--scrollbar-track)}
+    .row-scroll{scrollbar-width:none;}
+    .row-scroll::-webkit-scrollbar{display:none;}
+  </style>
+</helmet>
+
+<div style="position:relative;min-height:100vh;background:var(--black);font-family:var(--font-mono);color:var(--fg-primary);overflow-x:hidden;">
+  <div class="crt-scanlines"></div>
+  <div class="vhs-tracking"></div>
+
+  <div style="position:sticky;top:0;z-index:50;display:{{ headerDisplay }};align-items:center;justify-content:space-between;height:64px;padding:0 var(--space-6);border-bottom:1px solid var(--border-default);background:var(--black);">
+    <div style="display:flex;align-items:center;gap:var(--space-6);">
+      <div onClick="{{ goHome }}" style="cursor:pointer;font-weight:var(--weight-bold);font-size:var(--text-md);letter-spacing:var(--tracking-wider);text-transform:uppercase;">STAMNO_MEDIA</div>
+      <div style="display:flex;gap:var(--space-5);">
+        <div onClick="{{ goHome }}" style="cursor:pointer;font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ homeLinkColor }};border-bottom:1px solid {{ homeLinkBorder }};padding-bottom:2px;">Home</div>
+        <div onClick="{{ goMovies }}" style="cursor:pointer;font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ moviesLinkColor }};border-bottom:1px solid {{ moviesLinkBorder }};padding-bottom:2px;">Movies</div>
+        <div onClick="{{ goShows }}" style="cursor:pointer;font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ showsLinkColor }};border-bottom:1px solid {{ showsLinkBorder }};padding-bottom:2px;">Shows</div>
+        <div onClick="{{ goLibrary }}" style="cursor:pointer;font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ libLinkColor }};border-bottom:1px solid {{ libLinkBorder }};padding-bottom:2px;">Library</div>
+        <div onClick="{{ goRequests }}" style="cursor:pointer;font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ requestsLinkColor }};border-bottom:1px solid {{ requestsLinkBorder }};padding-bottom:2px;">Requests</div>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:var(--space-5);">
+      <div style="font-size:var(--text-sm);color:var(--fg-muted);letter-spacing:var(--tracking-wide);">SEARCH$</div>
+      <div style="width:28px;height:28px;border:1px solid var(--border-default);background:var(--gray-1);"></div>
+    </div>
+  </div>
+
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+    <div>
+      <div style="position:relative;height:440px;border-bottom:1px solid var(--border-default);display:flex;align-items:flex-end;padding:var(--space-7);background:radial-gradient(circle at 70% 30%, var(--chrome-shadow) 0%, var(--void) 60%);">
+        <div style="max-width:640px;display:flex;flex-direction:column;gap:var(--space-3);">
+          <div style="font-size:var(--text-2xl);text-transform:uppercase;font-weight:var(--weight-bold);letter-spacing:var(--tracking-wide);color:var(--fg-primary);">{{ active.title }}</div>
+          <div style="display:flex;gap:var(--space-3);align-items:center;font-size:var(--text-sm);color:var(--fg-secondary);">
+            <span>{{ active.year }}</span><span>&middot;</span><span>{{ active.duration }}</span><span>&middot;</span>
+            <span style="border:1px solid var(--border-default);padding:2px 8px;text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ active.genre }}</span>
+          </div>
+          <div style="font-size:var(--text-base);color:var(--fg-secondary);line-height:var(--leading-normal);">{{ active.synopsis }}</div>
+          <div style="display:flex;gap:var(--space-4);margin-top:var(--space-3);">
+            <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Button" variant="primary" onClick="{{ openPlayer }}" hint-size="140px,44px">&#9654; Play</x-import>
+            <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Button" variant="ghost" onClick="{{ openActiveDetail }}" hint-size="160px,44px">More Info</x-import>
+          </div>
+        </div>
+      </div>
+
+      <div style="padding:var(--space-6) var(--space-6) var(--space-8);display:flex;flex-direction:column;gap:var(--space-7);">
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+            <div style="font-size:var(--text-sm);letter-spacing:var(--tracking-wider);text-transform:uppercase;color:var(--fg-secondary);">Continue Watching</div>
+            <div style="display:flex;gap:var(--space-2);">
+              <div onClick="{{ scrollContinuePrev }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8249;</div>
+              <div onClick="{{ scrollContinueNext }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8250;</div>
+            </div>
+          </div>
+          <div id="row-continue" class="row-scroll" style="display:flex;gap:var(--space-4);overflow-x:auto;padding-bottom:var(--space-2);scroll-behavior:smooth;">
+            <sc-for list="{{ continueWatching }}" as="item" hint-placeholder-count="6">
+              <div onClick="{{ item.onOpen }}" style="flex:0 0 auto;width:160px;height:240px;position:relative;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+                <div style="position:absolute;inset:0;display:flex;align-items:flex-end;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+                  <div style="width:100%;padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+                </div>
+                <div style="position:absolute;left:0;bottom:0;height:3px;width:{{ item.progress }}%;background:var(--gray-5);"></div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+            <div style="font-size:var(--text-sm);letter-spacing:var(--tracking-wider);text-transform:uppercase;color:var(--fg-secondary);">Trending Now</div>
+            <div style="display:flex;gap:var(--space-2);">
+              <div onClick="{{ scrollTrendingPrev }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8249;</div>
+              <div onClick="{{ scrollTrendingNext }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8250;</div>
+            </div>
+          </div>
+          <div id="row-trending" class="row-scroll" style="display:flex;gap:var(--space-4);overflow-x:auto;padding-bottom:var(--space-2);scroll-behavior:smooth;">
+            <sc-for list="{{ trending }}" as="item" hint-placeholder-count="6">
+              <div onClick="{{ item.onOpen }}" style="flex:0 0 auto;width:160px;height:240px;position:relative;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+                  <div style="padding:var(--space-2);text-align:right;font-size:var(--text-xs);color:var(--fg-muted);">{{ item.year }}</div>
+                  <div style="padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+
+        <div>
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-4);">
+            <div style="font-size:var(--text-sm);letter-spacing:var(--tracking-wider);text-transform:uppercase;color:var(--fg-secondary);">Recently Added</div>
+            <div style="display:flex;gap:var(--space-2);">
+              <div onClick="{{ scrollRecentPrev }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8249;</div>
+              <div onClick="{{ scrollRecentNext }}" style="cursor:pointer;width:28px;height:28px;border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;" style-hover="border-color:var(--border-strong);">&#8250;</div>
+            </div>
+          </div>
+          <div id="row-recent" class="row-scroll" style="display:flex;gap:var(--space-4);overflow-x:auto;padding-bottom:var(--space-2);scroll-behavior:smooth;">
+            <sc-for list="{{ recentlyAdded }}" as="item" hint-placeholder-count="6">
+              <div onClick="{{ item.onOpen }}" style="flex:0 0 auto;width:160px;height:240px;position:relative;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+                <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+                <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+                  <div style="padding:var(--space-2);text-align:right;font-size:var(--text-xs);color:var(--fg-muted);">{{ item.year }}</div>
+                  <div style="padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isLibrary }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:var(--space-6);">
+      <div style="font-size:var(--text-xl);text-transform:uppercase;letter-spacing:var(--tracking-wide);margin-bottom:var(--space-5);color:var(--fg-primary);">LIBRARY</div>
+      <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-6);flex-wrap:wrap;">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+          <div onClick="{{ f.onSet }}" style="cursor:pointer;padding:6px 16px;border:1px solid {{ f.border }};color:{{ f.color }};font-size:var(--text-xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;">{{ f.name }}</div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-5);">
+        <sc-for list="{{ libraryMovies }}" as="item" hint-placeholder-count="12">
+          <div onClick="{{ item.onOpen }}" style="position:relative;height:240px;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+              <div style="padding:var(--space-2);text-align:right;font-size:var(--text-xs);color:var(--fg-muted);">{{ item.year }}</div>
+              <div style="padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isMovies }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:var(--space-6);">
+      <div style="font-size:var(--text-xl);text-transform:uppercase;letter-spacing:var(--tracking-wide);margin-bottom:var(--space-5);color:var(--fg-primary);">Movies</div>
+      <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-6);flex-wrap:wrap;">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+          <div onClick="{{ f.onSet }}" style="cursor:pointer;padding:6px 16px;border:1px solid {{ f.border }};color:{{ f.color }};font-size:var(--text-xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;">{{ f.name }}</div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-5);">
+        <sc-for list="{{ moviesList }}" as="item" hint-placeholder-count="10">
+          <div onClick="{{ item.onOpen }}" style="position:relative;height:240px;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+              <div style="padding:var(--space-2);text-align:right;font-size:var(--text-xs);color:var(--fg-muted);">{{ item.year }}</div>
+              <div style="padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isShows }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:var(--space-6);">
+      <div style="font-size:var(--text-xl);text-transform:uppercase;letter-spacing:var(--tracking-wide);margin-bottom:var(--space-5);color:var(--fg-primary);">Shows</div>
+      <div style="display:flex;gap:var(--space-3);margin-bottom:var(--space-6);flex-wrap:wrap;">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="5">
+          <div onClick="{{ f.onSet }}" style="cursor:pointer;padding:6px 16px;border:1px solid {{ f.border }};color:{{ f.color }};font-size:var(--text-xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;">{{ f.name }}</div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-5);">
+        <sc-for list="{{ showsList }}" as="item" hint-placeholder-count="8">
+          <div onClick="{{ item.onOpen }}" style="position:relative;height:240px;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+            <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+            <div style="position:absolute;inset:0;display:flex;flex-direction:column;justify-content:space-between;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+              <div style="padding:var(--space-2);text-align:right;font-size:var(--text-xs);color:var(--fg-muted);">{{ item.duration }}</div>
+              <div style="padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isRequests }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:var(--space-6);">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:var(--space-6);">
+        <div style="font-size:var(--text-xl);text-transform:uppercase;letter-spacing:var(--tracking-wide);color:var(--fg-primary);">Requests</div>
+        <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Button" variant="primary" onClick="{{ newRequest }}" hint-size="180px,44px">+ New Request</x-import>
+      </div>
+      <div style="display:flex;gap:var(--space-5);border-bottom:1px solid var(--border-default);margin-bottom:var(--space-6);">
+        <div onClick="{{ setMineTab }}" style="cursor:pointer;padding-bottom:var(--space-3);font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ mineTabColor }};border-bottom:2px solid {{ mineTabBorder }};">My Requests</div>
+        <div onClick="{{ setDiscoverTab }}" style="cursor:pointer;padding-bottom:var(--space-3);font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;color:{{ discoverTabColor }};border-bottom:2px solid {{ discoverTabBorder }};">Discover</div>
+      </div>
+
+      <sc-if value="{{ isMineTab }}" hint-placeholder-val="{{ true }}">
+        <div style="display:flex;flex-direction:column;border-top:1px solid var(--border-default);">
+          <sc-for list="{{ myRequests }}" as="item" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-2);border-bottom:1px solid var(--border-default);" style-hover="background:rgba(255,255,255,.03);">
+              <div style="width:48px;height:48px;flex:0 0 auto;border:1px solid var(--border-default);background:var(--gray-1);display:flex;align-items:center;justify-content:center;font-size:var(--text-md);color:var(--gray-3);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+              <div style="flex:1;display:flex;flex-direction:column;gap:2px;">
+                <div style="font-size:var(--text-base);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+                <div style="font-size:var(--text-xs);color:var(--fg-muted);">{{ item.type }} &middot; {{ item.year }} &middot; Requested {{ item.date }}</div>
+              </div>
+              <div style="padding:4px 12px;font-size:var(--text-xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;border:{{ item.statusBorder }};color:{{ item.statusColor }};">{{ item.statusLabel }}</div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDiscoverTab }}" hint-placeholder-val="{{ false }}">
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:var(--space-5);">
+          <sc-for list="{{ discoverList }}" as="item" hint-placeholder-count="10">
+            <div style="position:relative;height:240px;border:1px solid var(--border-default);background:var(--gray-1);overflow:hidden;">
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+              <div style="position:absolute;top:var(--space-2);right:var(--space-2);font-size:var(--text-xs);color:var(--fg-muted);">{{ item.year }}</div>
+              <div style="position:absolute;left:0;right:0;bottom:0;padding:var(--space-2);display:flex;flex-direction:column;gap:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.92),transparent);">
+                <div style="font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+                <div onClick="{{ item.onRequest }}" style="cursor:pointer;text-align:center;padding:6px 0;border:1px solid var(--border-strong);font-size:var(--text-xs);letter-spacing:var(--tracking-wide);text-transform:uppercase;" style-hover="background:var(--white);color:var(--black);">+ Request</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isDetail }}" hint-placeholder-val="{{ false }}">
+    <div>
+      <div onClick="{{ goHome }}" style="cursor:pointer;padding:var(--space-4) var(--space-6);font-size:var(--text-sm);color:var(--fg-secondary);letter-spacing:var(--tracking-wide);">&larr; BACK</div>
+      <div style="position:relative;z-index:0;height:340px;background:radial-gradient(circle at 30% 20%, var(--chrome-shadow) 0%, var(--void) 65%);border-bottom:1px solid var(--border-default);"></div>
+      <div style="position:relative;z-index:1;display:flex;gap:var(--space-6);padding:0 var(--space-6);margin-top:-120px;">
+        <div style="flex:0 0 200px;height:300px;border:1px solid var(--border-strong);background:var(--gray-1);display:flex;align-items:center;justify-content:center;font-size:96px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ active.initial }}</div>
+        <div style="flex:1;display:flex;flex-direction:column;gap:var(--space-4);padding-top:130px;max-width:700px;">
+          <div style="font-size:var(--text-2xl);text-transform:uppercase;font-weight:var(--weight-bold);letter-spacing:var(--tracking-wide);color:var(--fg-primary);">{{ active.title }}</div>
+          <div style="display:flex;gap:var(--space-3);align-items:center;font-size:var(--text-sm);color:var(--fg-secondary);">
+            <span>{{ active.year }}</span><span>&middot;</span><span>{{ active.duration }}</span><span>&middot;</span><span>{{ active.rating }}</span>
+          </div>
+          <div style="display:flex;gap:var(--space-2);">
+            <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Tag" color="{{ active.tagColor }}" hint-size="auto,28px">{{ active.genre }}</x-import>
+          </div>
+          <div style="font-size:var(--text-base);color:var(--fg-secondary);line-height:var(--leading-normal);">{{ active.synopsis }}</div>
+          <div style="font-size:var(--text-sm);color:var(--fg-muted);">Cast: {{ active.cast }}</div>
+          <div style="display:flex;gap:var(--space-4);margin-top:var(--space-2);">
+            <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Button" variant="primary" onClick="{{ openPlayer }}" hint-size="140px,44px">&#9654; Play</x-import>
+            <x-import component-from-global-scope="StamnoDesignSystem_ce0419.Button" variant="ghost" hint-size="160px,44px">+ Add to List</x-import>
+          </div>
+        </div>
+      </div>
+      <div style="padding:var(--space-8) var(--space-6);">
+        <div style="font-size:var(--text-sm);letter-spacing:var(--tracking-wider);text-transform:uppercase;color:var(--fg-secondary);margin-bottom:var(--space-4);">More Like This</div>
+        <div class="row-scroll" style="display:flex;gap:var(--space-4);overflow-x:auto;">
+          <sc-for list="{{ related }}" as="item" hint-placeholder-count="6">
+            <div onClick="{{ item.onOpen }}" style="flex:0 0 auto;width:160px;height:240px;position:relative;border:1px solid var(--border-default);background:var(--gray-1);cursor:pointer;overflow:hidden;" style-hover="border-color:var(--border-strong);">
+              <div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--gray-2);font-weight:var(--weight-bold);">{{ item.initial }}</div>
+              <div style="position:absolute;inset:0;display:flex;align-items:flex-end;opacity:0;transition:opacity .15s;" style-hover="opacity:1;">
+                <div style="width:100%;padding:var(--space-2);background:linear-gradient(0deg,rgba(0,0,0,.9),transparent);font-size:var(--text-xs);text-transform:uppercase;letter-spacing:var(--tracking-wide);">{{ item.title }}</div>
+              </div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isPlayer }}" hint-placeholder-val="{{ false }}">
+    <div style="background:var(--black);min-height:calc(100vh - 64px);display:flex;flex-direction:column;">
+      <div style="display:flex;align-items:center;gap:var(--space-4);padding:var(--space-4) var(--space-6);">
+        <div onClick="{{ backFromPlayer }}" style="cursor:pointer;font-size:var(--text-sm);color:var(--fg-secondary);">&larr; BACK</div>
+        <div style="font-size:var(--text-sm);letter-spacing:var(--tracking-wide);text-transform:uppercase;">{{ active.title }}</div>
+      </div>
+      <div style="flex:1;display:flex;align-items:center;justify-content:center;padding:0 var(--space-7);">
+        <div style="width:100%;max-width:1100px;aspect-ratio:16/9;background:radial-gradient(circle at 50% 45%, var(--chrome-shadow) 0%, var(--void) 70%);border:1px solid var(--border-default);display:flex;align-items:center;justify-content:center;position:relative;">
+          <div style="width:0;height:0;border-top:24px solid transparent;border-bottom:24px solid transparent;border-left:36px solid var(--white);opacity:.85;"></div>
+        </div>
+      </div>
+      <div style="padding:var(--space-5) var(--space-7) var(--space-7);display:flex;flex-direction:column;gap:var(--space-3);">
+        <div style="height:3px;width:100%;background:var(--gray-2);position:relative;">
+          <div style="position:absolute;left:0;top:0;height:100%;width:42%;background:var(--fg-primary);"></div>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;gap:var(--space-5);align-items:center;font-size:var(--text-md);">
+            <span style="cursor:pointer;">&#9664;&#9664;</span>
+            <span style="cursor:pointer;">&#10074;&#10074;</span>
+            <span style="cursor:pointer;">&#9654;&#9654;</span>
+            <span style="font-size:var(--text-xs);color:var(--fg-muted);letter-spacing:var(--tracking-wide);">00:52:14 / 02:04:00</span>
+          </div>
+          <div style="display:flex;gap:var(--space-5);align-items:center;font-size:var(--text-sm);color:var(--fg-secondary);">
+            <span style="cursor:pointer;">VOL</span>
+            <span style="cursor:pointer;">CC</span>
+            <span style="cursor:pointer;">&#9974;</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = {
+    screen: 'home', activeId: 1, filter: 'ALL', requestsTab: 'mine',
+    requestStatuses: { 2: 'AVAILABLE', 6: 'AVAILABLE', 9: 'PROCESSING', 14: 'PENDING', 16: 'PENDING' },
+    requestDates: { 2: 'JUL 02', 6: 'JUN 18', 9: 'JUL 10', 14: 'JUL 14', 16: 'JUL 12' },
+  };
+
+  catalog = [
+    { id: 1, title: 'ORBITAL DECAY', type: 'movie', year: 2024, duration: '2h 04m', genre: 'SCIFI', tagColor: 'cyan', rating: 'PG-13', progress: 62, synopsis: 'A salvage crew strips a dead station for parts and finds it is not as dead as the manifest says.', cast: 'R. Voss, M. Ilic, T. Auer' },
+    { id: 2, title: 'NIGHT DRIVE', type: 'movie', year: 2022, duration: '1h 47m', genre: 'THRILLER', tagColor: 'pink', rating: 'R', progress: 18, synopsis: 'A courier takes one last job across a city that does not want her to leave it.', cast: 'D. Marsh, K. Onwu' },
+    { id: 3, title: 'SECTOR 9', type: 'movie', year: 2023, duration: '2h 15m', genre: 'ACTION', tagColor: 'default', rating: 'R', progress: 0, synopsis: 'Three ex-operatives reunite to shut down the network they used to work for.', cast: 'J. Calder, P. Reyes, S. Ndiaye' },
+    { id: 4, title: 'GLASS ORCHARD', type: 'show', year: 2021, duration: '3 Seasons', genre: 'DRAMA', tagColor: 'default', rating: 'PG-13', progress: 47, synopsis: 'A family divides an inheritance and finds out how little they knew each other.', cast: 'A. Whitfield, L. Sorm' },
+    { id: 5, title: 'LOW ORBIT', type: 'movie', year: 2025, duration: '1h 52m', genre: 'SCIFI', tagColor: 'cyan', rating: 'PG-13', progress: 0, synopsis: 'The last functioning satellite relay picks up a signal it should not be able to receive.', cast: 'N. Brandt, C. Okafor' },
+    { id: 6, title: 'THE LONG SHIFT', type: 'show', year: 2020, duration: '2 Seasons', genre: 'THRILLER', tagColor: 'pink', rating: 'R', progress: 0, synopsis: 'A night-shift dispatcher realizes the calls she is routing are not going where she thinks.', cast: 'H. Duval, R. Kessler' },
+    { id: 7, title: 'RED CIRCUIT', type: 'movie', year: 2019, duration: '2h 01m', genre: 'ACTION', tagColor: 'default', rating: 'R', progress: 0, synopsis: 'A retired hacker is pulled back in when her old handle resurfaces in a ransom note.', cast: 'V. Okonkwo, T. Reyes' },
+    { id: 8, title: 'FERAL LIGHT', type: 'show', year: 2023, duration: '1 Season', genre: 'DRAMA', tagColor: 'default', rating: 'PG-13', progress: 0, synopsis: 'Two estranged brothers rebuild their father\u2019s workshop and, slowly, each other.', cast: 'M. Falk, G. Amaro' },
+    { id: 9, title: 'STATIC HORIZON', type: 'show', year: 2024, duration: '2 Seasons', genre: 'SCIFI', tagColor: 'cyan', rating: 'PG-13', progress: 0, synopsis: 'The last transmission from a colony ship arrives eighty years after it went silent.', cast: 'I. Solberg, Q. Marsh' },
+    { id: 10, title: 'BLACKOUT LANE', type: 'movie', year: 2018, duration: '1h 55m', genre: 'THRILLER', tagColor: 'pink', rating: 'R', progress: 0, synopsis: 'A city-wide blackout strands a detective one exit from the case that ended her career.', cast: 'F. Nakamura, D. Ellery' },
+    { id: 11, title: 'IRON HARVEST', type: 'movie', year: 2022, duration: '2h 08m', genre: 'ACTION', tagColor: 'default', rating: 'R', progress: 0, synopsis: 'A convoy crew runs one final route through territory that no longer answers to anyone.', cast: 'B. Sato, L. Kowalski' },
+    { id: 12, title: 'QUIET FREQUENCY', type: 'show', year: 2021, duration: '4 Seasons', genre: 'DRAMA', tagColor: 'default', rating: 'PG-13', progress: 0, synopsis: 'A radio operator in a coastal town keeps broadcasting long after anyone is listening.', cast: 'E. Voss, A. Petrov' },
+    { id: 13, title: 'SALT FLAT', type: 'movie', year: 2020, duration: '1h 49m', genre: 'ACTION', tagColor: 'default', rating: 'R', progress: 0, synopsis: 'A getaway driver strands her crew in the desert on purpose.', cast: 'R. Aoyama, C. Weber' },
+    { id: 14, title: 'DEEP FIELD', type: 'show', year: 2025, duration: '1 Season', genre: 'SCIFI', tagColor: 'cyan', rating: 'PG-13', progress: 0, synopsis: 'A telescope array picks up a pattern that repeats too perfectly to be noise.', cast: 'P. Lindqvist, S. Okoye' },
+    { id: 15, title: 'PALE HOUR', type: 'movie', year: 2019, duration: '1h 36m', genre: 'DRAMA', tagColor: 'default', rating: 'PG-13', progress: 0, synopsis: 'A night-shift nurse counts down the last hour of a job she is about to quit.', cast: 'M. Torres, J. Lindgren' },
+    { id: 16, title: 'WIRE AND ASH', type: 'show', year: 2022, duration: '3 Seasons', genre: 'THRILLER', tagColor: 'pink', rating: 'R', progress: 0, synopsis: 'An arson investigator finds her own name in the case files.', cast: 'A. Kessler, D. Osei' },
+    { id: 17, title: 'FAR SIGNAL', type: 'movie', year: 2023, duration: '2h 06m', genre: 'SCIFI', tagColor: 'cyan', rating: 'PG-13', progress: 0, synopsis: 'A rescue team follows a distress call to a moon that was never charted.', cast: 'T. Falk, N. Ibrahim' },
+    { id: 18, title: 'CUT ROPE', type: 'movie', year: 2021, duration: '1h 51m', genre: 'ACTION', tagColor: 'default', rating: 'R', progress: 0, synopsis: 'A climbing guide turned smuggler runs one route too many.', cast: 'K. Boone, R. Vidal' },
+  ];
+
+  handlers = {};
+  scrollRow(rowId, dir) {
+    const el = document.getElementById(rowId);
+    if (el) el.scrollBy({ left: dir * 520, behavior: 'smooth' });
+  }
+  getOpen(m) {
+    if (!this.handlers[m.id]) this.handlers[m.id] = () => this.setState({ screen: 'detail', activeId: m.id });
+    return this.handlers[m.id];
+  }
+  requestHandlers = {};
+  getRequest(m) {
+    if (!this.requestHandlers[m.id]) this.requestHandlers[m.id] = () => this.setState((s) => ({
+      requestStatuses: { ...s.requestStatuses, [m.id]: 'PENDING' },
+      requestDates: { ...s.requestDates, [m.id]: 'JUST NOW' },
+    }));
+    return this.requestHandlers[m.id];
+  }
+  statusMeta(status) {
+    if (status === 'AVAILABLE') return { label: 'AVAILABLE', border: '1px solid var(--border-strong)', color: 'var(--fg-primary)' };
+    if (status === 'PROCESSING') return { label: 'PROCESSING', border: '1px solid var(--border-default)', color: 'var(--fg-secondary)' };
+    return { label: 'PENDING', border: '1px dashed var(--border-default)', color: 'var(--fg-muted)' };
+  }
+
+  renderVals() {
+    const { screen, activeId, filter, requestsTab, requestStatuses, requestDates } = this.state;
+    const withOpen = this.catalog.map((m) => ({ ...m, initial: m.title[0], onOpen: this.getOpen(m) }));
+    const active = withOpen.find((m) => m.id === activeId) || withOpen[0];
+    const filters = ['ALL', 'ACTION', 'SCIFI', 'DRAMA', 'THRILLER'].map((name) => ({
+      name,
+      color: filter === name ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      border: filter === name ? 'var(--border-strong)' : 'var(--border-default)',
+      onSet: () => this.setState({ filter: name }),
+    }));
+    const libraryMovies = filter === 'ALL' ? withOpen : withOpen.filter((m) => m.genre === filter);
+    // eslint-disable-next-line no-unused-vars
+    const related = withOpen.filter((m) => m.id !== active.id).slice(0, 6);
+
+    return {
+      screen,
+      isHome: screen === 'home',
+      isLibrary: screen === 'library',
+      isDetail: screen === 'detail',
+      isPlayer: screen === 'player',
+      isMovies: screen === 'movies',
+      isShows: screen === 'shows',
+      headerDisplay: screen === 'player' ? 'none' : 'flex',
+      moviesLinkColor: screen === 'movies' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      moviesLinkBorder: screen === 'movies' ? 'var(--fg-primary)' : 'transparent',
+      showsLinkColor: screen === 'shows' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      showsLinkBorder: screen === 'shows' ? 'var(--fg-primary)' : 'transparent',
+      moviesList: withOpen.filter((m) => m.type === 'movie' && (filter === 'ALL' || m.genre === filter)),
+      showsList: withOpen.filter((m) => m.type === 'show' && (filter === 'ALL' || m.genre === filter)),
+      goMovies: () => this.setState({ screen: 'movies' }),
+      goShows: () => this.setState({ screen: 'shows' }),
+      isRequests: screen === 'requests',
+      requestsLinkColor: screen === 'requests' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      requestsLinkBorder: screen === 'requests' ? 'var(--fg-primary)' : 'transparent',
+      goRequests: () => this.setState({ screen: 'requests' }),
+      isMineTab: requestsTab === 'mine',
+      isDiscoverTab: requestsTab === 'discover',
+      mineTabColor: requestsTab === 'mine' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      mineTabBorder: requestsTab === 'mine' ? 'var(--fg-primary)' : 'transparent',
+      discoverTabColor: requestsTab === 'discover' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      discoverTabBorder: requestsTab === 'discover' ? 'var(--fg-primary)' : 'transparent',
+      setMineTab: () => this.setState({ requestsTab: 'mine' }),
+      setDiscoverTab: () => this.setState({ requestsTab: 'discover' }),
+      newRequest: () => this.setState({ requestsTab: 'discover' }),
+      myRequests: Object.keys(requestStatuses).map((id) => {
+        const m = withOpen.find((x) => x.id === Number(id));
+        const meta = this.statusMeta(requestStatuses[id]);
+        return { ...m, statusLabel: meta.label, statusBorder: meta.border, statusColor: meta.color, date: requestDates[id] };
+      }),
+      discoverList: withOpen.filter((m) => !requestStatuses[m.id]).map((m) => ({ ...m, onRequest: this.getRequest(m) })),
+      homeLinkColor: screen === 'home' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      homeLinkBorder: screen === 'home' ? 'var(--fg-primary)' : 'transparent',
+      libLinkColor: screen === 'library' ? 'var(--fg-primary)' : 'var(--fg-secondary)',
+      libLinkBorder: screen === 'library' ? 'var(--fg-primary)' : 'transparent',
+      active,
+      continueWatching: withOpen.slice(0, 9),
+      trending: withOpen.slice(3, 13),
+      recentlyAdded: withOpen.slice(6, 16),
+      scrollContinuePrev: () => this.scrollRow('row-continue', -1),
+      scrollContinueNext: () => this.scrollRow('row-continue', 1),
+      scrollTrendingPrev: () => this.scrollRow('row-trending', -1),
+      scrollTrendingNext: () => this.scrollRow('row-trending', 1),
+      scrollRecentPrev: () => this.scrollRow('row-recent', -1),
+      scrollRecentNext: () => this.scrollRow('row-recent', 1),
+      libraryMovies,
+      related,
+      filters,
+      goHome: () => this.setState({ screen: 'home' }),
+      goLibrary: () => this.setState({ screen: 'library' }),
+      openActiveDetail: () => this.setState({ screen: 'detail' }),
+      openPlayer: () => this.setState({ screen: 'player' }),
+      backFromPlayer: () => this.setState({ screen: 'detail' }),
+    };
+  }
+}
+
+</script>
+</body>
+</html>

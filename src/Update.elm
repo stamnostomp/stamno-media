@@ -62,6 +62,88 @@ update msg model =
                 ]
             )
 
+        OpenMetaPicker item ->
+            ( { model | metaPickerFor = Just item, metaQuery = "", metaResults = [], metaBusy = False, metaNote = Nothing }
+            , Cmd.none
+            )
+
+        CloseMetaPicker ->
+            ( { model | metaPickerFor = Nothing, metaResults = [], metaNote = Nothing }
+            , Cmd.none
+            )
+
+        SetMetaQuery q ->
+            ( { model | metaQuery = q }, Cmd.none )
+
+        MetaSearchSubmit ->
+            case model.metaPickerFor of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just item ->
+                    let
+                        ty =
+                            if String.toLower item.itemType == "episode" then
+                                "tv"
+
+                            else
+                                "movie"
+                    in
+                    ( { model | metaBusy = True, metaNote = Nothing }
+                    , Api.fetchRemoteSearch model.token model.metaQuery ty GotRemoteSearch
+                    )
+
+        GotRemoteSearch result ->
+            case result of
+                Ok rs ->
+                    ( { model | metaResults = rs, metaBusy = False }
+                    , Cmd.none
+                    )
+
+                Err _ ->
+                    ( { model | metaBusy = False, metaNote = Just "SEARCH FAILED" }
+                    , Cmd.none
+                    )
+
+        PickTmdb r ->
+            case model.metaPickerFor of
+                Nothing ->
+                    ( model, Cmd.none )
+
+                Just item ->
+                    let
+                        ty =
+                            if String.toLower item.itemType == "episode" then
+                                "tv"
+
+                            else
+                                "movie"
+                    in
+                    ( { model | metaBusy = True, metaNote = Nothing }
+                    , Api.setItemTmdb model.token item.id r.tmdbId ty GotSetTmdb
+                    )
+
+        GotSetTmdb result ->
+            case result of
+                Ok meta ->
+                    let
+                        refreshMeta =
+                            case model.activeRealItem of
+                                Just it ->
+                                    Api.fetchItemMetadata model.token it.id GotItemMetadata
+
+                                Nothing ->
+                                    Cmd.none
+                    in
+                    ( { model | itemMeta = Just meta, metaBusy = False, metaNote = Just "METADATA UPDATED", metaResults = [] }
+                      , Cmd.batch [ Api.fetchLibrary model.token GotLibrary, refreshMeta ]
+                      )
+
+                Err _ ->
+                    ( { model | metaBusy = False, metaNote = Just "UPDATE FAILED" }
+                    , Cmd.none
+                    )
+
         GotItemMetadata result ->
             case result of
                 Ok meta ->

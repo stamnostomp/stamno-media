@@ -48,6 +48,10 @@ module Api exposing
     , transcodingSrc
     , episodeLabel
 
+    , RemoteSearchResult
+    , remoteSearchDecoder
+    , fetchRemoteSearch
+    , setItemTmdb
     , itemDecoder)
 
 {-| Client for the functonal-media-server HTTP API. Progress reporting
@@ -508,6 +512,63 @@ fetchItemMetadata token itemId toMsg =
                 (Decode.map (Maybe.withDefault emptyItemMetadata)
                     (Decode.maybe (Decode.field "Metadata" itemMetadataDecoder))
                 )
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m83: one TMDB remote-search hit (GET /Items/RemoteSearch). -}
+type alias RemoteSearchResult =
+    { id : String
+    , name : String
+    , typeName : String
+    , year : Maybe Int
+    , tmdbId : Int
+    , overview : Maybe String
+    }
+
+
+remoteSearchDecoder : Decoder RemoteSearchResult
+remoteSearchDecoder =
+    Decode.map6 RemoteSearchResult
+        (Decode.field "Id" Decode.string)
+        (Decode.field "Name" Decode.string)
+        (Decode.field "Type" Decode.string)
+        (Decode.maybe (Decode.field "ProductionYear" Decode.int))
+        (Decode.field "ProviderIds" (Decode.field "Tmdb" Decode.int))
+        (Decode.maybe (Decode.field "Overview" Decode.string))
+
+
+{-| m83: GET /Items/RemoteSearch?searchTerm=q&type=movie|tv -}
+fetchRemoteSearch : Maybe String -> String -> String -> (Result Http.Error (List RemoteSearchResult) -> msg) -> Cmd msg
+fetchRemoteSearch token q type_ toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Items/RemoteSearch?searchTerm=" ++ Url.percentEncode q ++ "&type=" ++ type_
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list remoteSearchDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
+
+
+{-| m83: POST /items/<id>/metadata/tmdb {"TmdbId": n, "Type": "movie"|"tv"} -
+admin manual TMDB override; answers the stored metadata JSON. -}
+setItemTmdb : Maybe String -> String -> Int -> String -> (Result Http.Error ItemMetadata -> msg) -> Cmd msg
+setItemTmdb token itemId tmdbId type_ toMsg =
+    Http.request
+        { method = "POST"
+        , headers = authHeader token
+        , url = baseUrl ++ "/items/" ++ itemId ++ "/metadata/tmdb"
+        , body =
+            Http.jsonBody
+                (Encode.object
+                    [ ( "TmdbId", Encode.int tmdbId )
+                    , ( "Type", Encode.string type_ )
+                    ]
+                )
+        , expect = Http.expectJson toMsg itemMetadataDecoder
         , timeout = Nothing
         , tracker = Nothing
         }
