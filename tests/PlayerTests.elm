@@ -42,15 +42,10 @@ mkDetail seasons =
     { id = "1434", name = Just "Family Guy", year = Just 1999, overview = Nothing, posterUrl = Nothing, seasons = seasons }
 
 
-ch : Int -> Maybe String -> Api.Chapter
-ch ticks name =
-    { index = 0, startPositionTicks = ticks, name = name }
-
-
 suite : Test
 suite =
     describe "Player helpers (m74: skip intro + next episode)"
-        , describe "nextEpisodeItem"
+        [ describe "nextEpisodeItem"
             [ test "next downloaded episode in the same season" <|
                 \_ ->
                     let
