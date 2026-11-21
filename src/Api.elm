@@ -555,6 +555,8 @@ type alias RequestEntry =
     , downloadDir : Maybe String
     , progress : Maybe Float
     , torrentState : Maybe String
+    , season : Maybe Int
+    , episode : Maybe Int
     }
 
 
@@ -564,15 +566,21 @@ requestEntryDecoder =
     Decode.map2 (\r d -> { r | downloadDir = d })
         (Decode.map2 (\r p -> { r | progress = p })
             (Decode.map2 (\r ts -> { r | torrentState = ts })
-                (Decode.map8 (\i t y m s sz sr c -> RequestEntry i t y m s sz sr c Nothing Nothing Nothing)
-                    (Decode.field "Id" Decode.string)
-                    (Decode.field "Title" Decode.string)
-                    (Decode.maybe (Decode.field "Year" Decode.int))
-                    (Decode.field "MediaType" Decode.string)
-                    (Decode.field "Status" Decode.string)
-                    (Decode.maybe (Decode.field "SizeBytes" Decode.int))
-                    (Decode.maybe (Decode.field "SourceRelease" Decode.string))
-                    (Decode.field "CreatedAt" Decode.string)
+                (Decode.map2 (\r e -> { r | episode = e })
+                    (Decode.map2 (\r sn -> { r | season = sn })
+                        (Decode.map8 (\i t y m s sz sr c -> RequestEntry i t y m s sz sr c Nothing Nothing Nothing Nothing Nothing)
+                            (Decode.field "Id" Decode.string)
+                            (Decode.field "Title" Decode.string)
+                            (Decode.maybe (Decode.field "Year" Decode.int))
+                            (Decode.field "MediaType" Decode.string)
+                            (Decode.field "Status" Decode.string)
+                            (Decode.maybe (Decode.field "SizeBytes" Decode.int))
+                            (Decode.maybe (Decode.field "SourceRelease" Decode.string))
+                            (Decode.field "CreatedAt" Decode.string)
+                        )
+                        (Decode.maybe (Decode.field "Season" Decode.int))
+                    )
+                    (Decode.maybe (Decode.field "Episode" Decode.int))
                 )
                 (Decode.maybe (Decode.field "TorrentState" Decode.string))
             )
@@ -642,6 +650,8 @@ type alias CreateRequestPayload =
     { title : String
     , year : Maybe Int
     , tmdbId : Maybe Int
+    , season : Maybe Int
+    , episode : Maybe Int
     , mediaType : Maybe String
     , trackerId : Maybe String
     , release : Maybe String
@@ -667,6 +677,8 @@ encodeCreateRequest p =
         [ ( "Title", Encode.string p.title ) ]
             ++ encodeMaybe "Year" Encode.int p.year
             ++ encodeMaybe "TmdbId" Encode.int p.tmdbId
+            ++ encodeMaybe "Season" Encode.int p.season
+            ++ encodeMaybe "Episode" Encode.int p.episode
             ++ encodeMaybe "Type" Encode.string p.mediaType
             ++ encodeMaybe "TrackerId" Encode.string p.trackerId
             ++ encodeMaybe "Release" Encode.string p.release

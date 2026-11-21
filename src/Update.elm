@@ -342,7 +342,7 @@ update msg model =
         SearchReleases ->
             -- m59: Search shows TMDB result cards for the query (not the
             -- torrent list yet); clicking a card runs the indexer search
-            ( { model | reqLoading = True, reqNotice = Nothing, releases = [], reqTmdbId = Nothing, reqYear = Nothing }
+            ( { model | reqLoading = True, reqNotice = Nothing, releases = [], reqTmdbId = Nothing, reqYear = Nothing, reqSeason = Nothing, reqEpisode = Nothing, reqKind = Nothing }
             , Api.fetchDiscoverSearch model.token model.reqQuery GotDiscoverSearch
             )
 
@@ -358,6 +358,9 @@ update msg model =
                         | reqQuery = item.name
                         , reqTmdbId = String.toInt item.id
                         , reqYear = item.year
+                        , reqSeason = Nothing
+                        , reqEpisode = Nothing
+                        , reqKind = Just "movie"
                         , reqLoading = True
                         , reqNotice = Nothing
                         , searchMovies = []
@@ -374,6 +377,9 @@ update msg model =
                 | discoverShow = Just item
                 , reqTmdbId = String.toInt item.id
                 , reqYear = item.year
+                , reqSeason = Nothing
+                , reqEpisode = Nothing
+                , reqKind = Just "tv"
                 , seriesDetail = Nothing
                 , seriesSeason = Nothing
                 , releases = []
@@ -390,6 +396,9 @@ update msg model =
                 | discoverShow = Nothing
                 , reqTmdbId = Nothing
                 , reqYear = Nothing
+                , reqSeason = Nothing
+                , reqEpisode = Nothing
+                , reqKind = Nothing
                 , seriesDetail = Nothing
                 , seriesSeason = Nothing
                 , releases = []
@@ -420,6 +429,9 @@ update msg model =
                         | reqQuery = q
                         , reqTmdbId = model.discoverShow |> Maybe.andThen (String.toInt << .id)
                         , reqYear = model.discoverShow |> Maybe.andThen .year
+                        , reqSeason = Just season
+                        , reqEpisode = Just ep
+                        , reqKind = Just "tv"
                         , releases = []
                         , reqLoading = True
                         , reqNotice = Nothing
@@ -442,6 +454,9 @@ update msg model =
                         | reqQuery = q
                         , reqTmdbId = model.discoverShow |> Maybe.andThen (String.toInt << .id)
                         , reqYear = model.discoverShow |> Maybe.andThen .year
+                        , reqSeason = Just season
+                        , reqEpisode = Nothing
+                        , reqKind = Just "tv"
                         , releases = []
                         , reqLoading = True
                         , reqNotice = Nothing
@@ -498,7 +513,9 @@ update msg model =
                             model.reqQuery
                     , year = model.reqYear
                     , tmdbId = model.reqTmdbId
-                    , mediaType = Just "movie"
+                    , season = model.reqSeason
+                    , episode = model.reqEpisode
+                    , mediaType = Maybe.withDefault "movie" model.reqKind |> Just
                     , trackerId =
                         -- m28: prefer the release's own IndexerId (works when
                         -- ALL TRACKERS is selected); fall back to the picker

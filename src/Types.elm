@@ -85,6 +85,9 @@ type alias Model =
     , reqQuery : String
     , reqTmdbId : Maybe Int
     , reqYear : Maybe Int
+    , reqSeason : Maybe Int
+    , reqEpisode : Maybe Int
+    , reqKind : Maybe String
     , releases : List Api.Release
     , reqNotice : Maybe String
     , reqLoading : Bool
@@ -141,6 +144,9 @@ init _ =
       , reqQuery = ""
       , reqTmdbId = Nothing
       , reqYear = Nothing
+      , reqSeason = Nothing
+      , reqEpisode = Nothing
+      , reqKind = Nothing
       , releases = []
       , reqNotice = Nothing
       , reqLoading = False
