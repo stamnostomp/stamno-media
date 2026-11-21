@@ -76,7 +76,7 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress subti
             , style "pointer-events" (pointerEventsFor controlsVisible)
             , style "transition" "opacity 0.3s"
             ]
-            [ div [ class "f6 tracked-wide ttu" ] [ text item.title ]
+            [ div [ class "f6 tracked-wide ttu" ] [ text (Api.playerFileName item) ]
             , div [ class "flex items-center gap-3" ]
                 [ -- m33: TRANSCODING badge when the server told us to transcode
                   case playSrc of

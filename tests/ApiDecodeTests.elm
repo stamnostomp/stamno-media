@@ -78,6 +78,23 @@ suite =
 
                     Err err ->
                         Expect.fail (Decode.errorToString err)
+        , test "m77 itemDecoder reads path (lowercase) and playerFileName shows the file name with extension" <|
+            \() ->
+                case Decode.decodeString Api.itemDecoder "{\"id\":\"4\",\"title\":\"Shrek.2001.1080p\",\"size\":1,\"mime\":\"video/x-matroska\",\"path\":\"/lib/Shrek.2001.1080p.BluRay.x265-LAMA.mkv\"}" of
+                    Ok item ->
+                        Expect.all
+                            [ \i -> Expect.equal "4" i.id
+                            , \i -> Expect.equal "/lib/Shrek.2001.1080p.BluRay.x265-LAMA.mkv" i.path
+                            , \i -> Expect.equal "Shrek.2001.1080p.BluRay.x265-LAMA.mkv" (Api.playerFileName i)
+                            ]
+                            item
+
+                    Err _ ->
+                        Expect.fail "itemDecoder should parse path"
+        , test "m77 playerFileName falls back to title when path is empty" <|
+            \() ->
+                Expect.equal "Shrek.2001.1080p"
+                    (Api.playerFileName { id = "4", title = "Shrek.2001.1080p", size = 1, mime = "video/x-matroska", displayTitle = "Shrek", itemType = "movie", seriesName = Nothing, itemSeason = Nothing, itemEpisode = Nothing, genres = [], path = "" })
         , test "m66 discoverItemDecoder tolerates missing OriginalName/OriginalLanguage (old server)" <|
             \_ ->
                 case Decode.decodeString Api.discoverItemDecoder

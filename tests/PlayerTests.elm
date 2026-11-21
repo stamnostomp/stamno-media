@@ -18,6 +18,7 @@ mkItem id itemType seriesName season episode =
     , itemSeason = season
     , itemEpisode = episode
     , genres = []
+    , path = ""
     }
 
 

@@ -46,7 +46,10 @@ module Api exposing
     , searchReleases
     , streamUrl
     , transcodingSrc
-    )
+    
+    , playerFileName
+    , fileNameOf
+    , itemDecoder)
 
 {-| Client for the functonal-media-server HTTP API. Progress reporting
 (POST /progress) is done directly from JS in index.html on a timer, not
@@ -77,7 +80,31 @@ type alias Item =
     , itemSeason : Maybe Int
     , itemEpisode : Maybe Int
     , genres : List String
+    , path : String
     }
+
+
+{-| m77: the file name (last path segment, WITH extension) of an item path;
+falls back to the whole string when there is no slash. -}
+fileNameOf : String -> String
+fileNameOf path =
+    case List.reverse (String.split "/" path) of
+        name :: _ ->
+            name
+
+        [] ->
+            path
+
+
+{-| m77: the label the player header shows — the real FILE name (with
+`extension`), falling back to the base title when the path is unknown. -}
+playerFileName : Item -> String
+playerFileName item =
+    if String.isEmpty item.path then
+        item.title
+
+    else
+        fileNameOf item.path
 
 
 {-| m40: optional displayTitle (server sends the TMDB title); falls back
@@ -157,31 +184,48 @@ itemGenresField =
 (the pinned elm/json has no map9+). -}
 mkItem : String -> String -> Int -> String -> String -> String -> Maybe String -> Item
 mkItem id title size mime displayTitle itemType seriesName =
-    Item id title size mime displayTitle itemType seriesName Nothing Nothing []
+    Item id title size mime displayTitle itemType seriesName Nothing Nothing [] ""
+
+
+{-| m77: optional file path (lowercase `path` from /library, PascalCase
+`Path` from /Items), default "". -}
+pathField : Decoder String
+pathField =
+    Decode.map (Maybe.withDefault "")
+        (Decode.maybe
+            (Decode.oneOf
+                [ Decode.field "path" Decode.string
+                , Decode.field "Path" Decode.string
+                ]
+            )
+        )
 
 
 itemDecoder : Decoder Item
 itemDecoder =
-    Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map2 (\i gs -> { i | genres = gs })
-            (Decode.map2 (\i se -> { i | itemSeason = se })
-                (Decode.map2 (\i ep -> { i | itemEpisode = ep })
-                    (Decode.map7 mkItem
-                    (Decode.field "id" Decode.string)
-                    (Decode.field "title" Decode.string)
-                    (Decode.field "size" Decode.int)
-                    (Decode.field "mime" Decode.string)
-                    (Decode.succeed "")
-                        itemTypeField
-                        seriesNameField
+    Decode.map2 (\i p -> { i | path = p })
+        (Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
+            (Decode.map2 (\i gs -> { i | genres = gs })
+                (Decode.map2 (\i se -> { i | itemSeason = se })
+                    (Decode.map2 (\i ep -> { i | itemEpisode = ep })
+                        (Decode.map7 mkItem
+                        (Decode.field "id" Decode.string)
+                        (Decode.field "title" Decode.string)
+                        (Decode.field "size" Decode.int)
+                        (Decode.field "mime" Decode.string)
+                        (Decode.succeed "")
+                            itemTypeField
+                            seriesNameField
+                        )
+                        itemEpisodeField
                     )
-                    itemEpisodeField
+                    itemSeasonField
                 )
-                itemSeasonField
+                itemGenresField
             )
-            itemGenresField
+            displayTitleField
         )
-        displayTitleField
+        pathField
 
 
 {-| A library item with an in-progress watch percentage (0..100), as
@@ -197,34 +241,38 @@ type alias ContinueItem =
     , seriesName : Maybe String
     , itemSeason : Maybe Int
     , itemEpisode : Maybe Int
+    , path : String
     }
 
 
 mkContinueItem : String -> String -> Int -> String -> Int -> String -> String -> Maybe String -> ContinueItem
 mkContinueItem id title size mime progress displayTitle itemType seriesName =
-    ContinueItem id title size mime progress displayTitle itemType seriesName Nothing Nothing
+    ContinueItem id title size mime progress displayTitle itemType seriesName Nothing Nothing ""
 
 
 continueItemDecoder : Decoder ContinueItem
 continueItemDecoder =
-    Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
-        (Decode.map2 (\i se -> { i | itemSeason = se })
-            (Decode.map2 (\i ep -> { i | itemEpisode = ep })
-                (Decode.map8 mkContinueItem
-                    (Decode.field "id" Decode.string)
-                    (Decode.field "title" Decode.string)
-                    (Decode.field "size" Decode.int)
-                    (Decode.field "mime" Decode.string)
-                    (Decode.field "progress" Decode.int)
-                    (Decode.succeed "")
-                    itemTypeField
-                    seriesNameField
+    Decode.map2 (\i p -> { i | path = p })
+        (Decode.map2 (\i md -> { i | displayTitle = Maybe.withDefault i.title md })
+            (Decode.map2 (\i se -> { i | itemSeason = se })
+                (Decode.map2 (\i ep -> { i | itemEpisode = ep })
+                    (Decode.map8 mkContinueItem
+                        (Decode.field "id" Decode.string)
+                        (Decode.field "title" Decode.string)
+                        (Decode.field "size" Decode.int)
+                        (Decode.field "mime" Decode.string)
+                        (Decode.field "progress" Decode.int)
+                        (Decode.succeed "")
+                        itemTypeField
+                        seriesNameField
+                    )
+                    itemEpisodeField
                 )
-                itemEpisodeField
+                itemSeasonField
             )
-            itemSeasonField
+            displayTitleField
         )
-        displayTitleField
+        pathField
 
 
 {-| The auth token returned by POST /Users/AuthenticateByName, plus the
