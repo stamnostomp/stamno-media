@@ -1,33 +1,35 @@
 module Pages.Shows exposing (view)
 
 import Api
-import Components exposing (libraryCard)
+import Components exposing (posterImage)
 import Dict
 import Html exposing (Html, div, text)
-import Html.Attributes exposing (class)
+import Html.Attributes exposing (class, style)
 import Html.Events exposing (onClick)
+import String
 import Types exposing (Model, Msg(..))
 
 
-{-| m43: real episode items grouped by series name; searched by the global
-search box. When the library has no episodes, a muted note shows. -}
+{-| m43/m81: real episode items grouped by series name. m81: the Shows tab
+renders ONE card per series (like a movie card) - clicking it opens the
+series page with the season box + episode list (m47) - instead of listing
+every episode card inline. Searched by the global search box (series name). -}
 view : Model -> Html Msg
 view model =
     let
-        episodes =
+        series =
             model.library
                 |> List.filter isEpisode
-                |> search model.search
                 |> groupBySeries
+                |> searchSeries model.search
     in
     div [ class "pa4" ]
         [ div [ class "text-xl ttu tracked-wide mb-5 fg-primary" ] [ text "SHOWS" ]
-        , if List.isEmpty episodes then
+        , if List.isEmpty series then
             div [ class "f6 fg-muted" ] [ text "NO SHOWS YET" ]
 
           else
-            div [ class "flex flex-column gap-7" ]
-                (List.map (seriesSection model.token) episodes)
+            div [ class "grid-fill" ] (List.map (seriesCard model.token) series)
         ]
 
 
@@ -36,17 +38,30 @@ isEpisode i =
     String.toLower i.itemType == "episode" || i.seriesName /= Nothing
 
 
-seriesSection : Maybe String -> ( String, List Api.Item ) -> Html Msg
-seriesSection token ( series, eps ) =
-    div []
-        [ -- m47: clicking the series header opens the series view
-          div
-            [ class "f6 tracked-wider ttu fg-secondary mb3 pointer b"
-            , onClick (OpenSeries series)
-            ]
-            [ text series ]
-        , div [ class "grid-fill" ] (List.map (libraryCard token) eps)
-        ]
+{-| One poster card per series; the poster is the first episode's image. -}
+seriesCard : Maybe String -> ( String, List Api.Item ) -> Html Msg
+seriesCard token ( series, eps ) =
+    case List.head eps of
+        Nothing ->
+            text ""
+
+        Just ep ->
+            div
+                [ class "poster relative pointer"
+                , style "height" "240px"
+                , onClick (OpenSeries series)
+                ]
+                [ div
+                    [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+                    , style "font-size" "64px"
+                    ]
+                    [ text (String.left 1 series) ]
+                , posterImage token ep.id
+                , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
+                    [ div [ class "pa2 tr f7 fg-muted" ] [ text (String.fromInt (List.length eps) ++ " EPISODES") ]
+                    , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text series ]
+                    ]
+                ]
 
 
 {-| Group episodes by series name (missing -> OTHER), preserving order. -}
@@ -63,14 +78,14 @@ groupBySeries items =
     Dict.toList (List.foldl add Dict.empty items)
 
 
-search : String -> List Api.Item -> List Api.Item
-search query items =
+searchSeries : String -> List ( String, List Api.Item ) -> List ( String, List Api.Item )
+searchSeries query groups =
     if String.isEmpty query then
-        items
+        groups
 
     else
         let
             lower =
                 String.toLower query
         in
-        List.filter (\item -> String.contains lower (String.toLower item.displayTitle) || String.contains lower (String.toLower item.title)) items
+        List.filter (\( name, _ ) -> String.contains lower (String.toLower name)) groups
