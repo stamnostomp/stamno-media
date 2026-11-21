@@ -73,9 +73,17 @@ libraryCard token item =
         , posterImage token item.id
         , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
             [ div [ class "pa2 tr f7 fg-muted" ] [ text (formatBytes item.size) ]
-            , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.displayTitle ]
+            , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text (cardLabel item) ]
             ]
         ]
+
+
+{-| m81: episode cards are labelled "S01E05 · Name" (not the series name,
+-- which made every episode look like its own show); everything else uses
+-- the display title. -}
+cardLabel : Api.Item -> String
+cardLabel item =
+    Maybe.withDefault item.displayTitle (Api.episodeLabel item)
 
 
 {-| Fixed-width variant of 'libraryCard' for horizontal row-scrolls. -}
@@ -94,7 +102,7 @@ libraryRowCard token item =
             [ text (String.left 1 item.displayTitle) ]
         , posterImage token item.id
         , div [ class "reveal absolute absolute--fill flex items-end" ]
-            [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text item.displayTitle ] ]
+            [ div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text (cardLabel item) ] ]
         ]
 
 

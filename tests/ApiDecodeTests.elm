@@ -210,4 +210,25 @@ suite =
 
                     Err err ->
                         Expect.fail (Decode.errorToString err)
+        , test "m81 episodeLabel: SxxEyy + name parsed from file title, release paren stripped" <|
+            \_ ->
+                let
+                    ep =
+                        Api.Item "10" "What We Do in the Shadows (2019) - S01E05 - Animal Control (1080p AMZN WEB-DL x265 Ghost).mkv" 754519978 "video/x-matroska" "What We Do in the Shadows" "Episode" (Just "What We Do in the Shadows") (Just 1) (Just 5) [] ""
+                in
+                Expect.equal (Api.episodeLabel ep) (Just "S01E05 · Animal Control")
+        , test "m81 episodeLabel: no SxxEyy token in title -> just the code" <|
+            \_ ->
+                let
+                    ep =
+                        Api.Item "11" "Some Episode File.mkv" 100 "video/x-matroska" "Some Show" "Episode" (Just "Some Show") (Just 2) (Just 3) [] ""
+                in
+                Expect.equal (Api.episodeLabel ep) (Just "S02E03")
+        , test "m81 episodeLabel: movie -> Nothing (falls back to displayTitle)" <|
+            \_ ->
+                let
+                    mv =
+                        Api.Item "1" "Shrek.2001.1080p.mp4" 100 "video/mp4" "Shrek" "Movie" Nothing Nothing Nothing [] ""
+                in
+                Expect.equal (Api.episodeLabel mv) Nothing
         ]

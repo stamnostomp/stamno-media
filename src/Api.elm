@@ -46,13 +46,15 @@ module Api exposing
     , searchReleases
     , streamUrl
     , transcodingSrc
-    
+    , episodeLabel
+
     , itemDecoder)
 
 {-| Client for the functonal-media-server HTTP API. Progress reporting
 (POST /progress) is done directly from JS in index.html on a timer, not
 through Elm, so there's no Elm-side function for it. -}
 
+import Char
 import Http
 import Json.Decode as Decode exposing (Decoder)
 import Json.Encode as Encode
@@ -202,6 +204,97 @@ itemDecoder =
             displayTitleField
         )
         pathField
+
+
+{-| m81: card label for an episode item: "S01E05 · Animal Control" derived
+-- from seasonNumber/episodeNumber plus the text after the SxxEyy token in
+-- the file title. Nothing for non-episodes (caller falls back to
+-- displayTitle), so every episode of a show no longer renders as its own
+-- show card with the series name. -}
+episodeLabel : Item -> Maybe String
+
+
+episodeLabel i =
+    case ( i.itemSeason, i.itemEpisode ) of
+        ( Just s, Just e ) ->
+            let
+                tok =
+                    "S" ++ pad2 s ++ "E" ++ pad2 e
+
+                lt =
+                    String.toLower i.title
+
+                ltok =
+                    String.toLower tok
+            in
+            case List.head (String.indexes ltok lt) of
+                Just ix ->
+                    let
+                        after =
+                            String.slice (ix + String.length ltok) (String.length i.title) i.title
+
+                        cleaned =
+                            cleanEpisodeName after
+                    in
+                    Just (tok ++ (if String.isEmpty cleaned then "" else " · " ++ cleaned))
+
+                Nothing ->
+                    Just tok
+
+        _ ->
+            Nothing
+
+
+pad2 : Int -> String
+pad2 n =
+    String.padLeft 2 '0' (String.fromInt n)
+
+
+{-| Strip leading separator junk (" - ", "–", ...) after the SxxEyy token
+and a trailing release-info paren group (" (1080p ...)") from the episode
+name. -}
+dropSepWhile : String -> String
+dropSepWhile s =
+    case String.uncons s of
+        Just ( c, rest ) ->
+            if c == '-' || c == '–' || c == '—' || c == '·' || c == ' ' then
+                dropSepWhile rest
+
+            else
+                s
+
+        Nothing ->
+            s
+
+
+cleanEpisodeName : String -> String
+cleanEpisodeName after =
+    let
+        t1 =
+            String.trim after
+
+        t3 =
+            String.trim (dropSepWhile t1)
+    in
+    case String.indexes " (" t3 of
+        first :: _ ->
+            let
+                tail =
+                    String.slice (first + 2) (String.length t3) t3
+            in
+            case String.uncons tail of
+                Just ( c, _ ) ->
+                    if Char.isDigit c then
+                        String.trim (String.slice 0 first t3)
+
+                    else
+                        t3
+
+                Nothing ->
+                    t3
+
+        [] ->
+            t3
 
 
 {-| A library item with an in-progress watch percentage (0..100), as
