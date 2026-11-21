@@ -136,6 +136,7 @@ update msg model =
                 , nowPlaying = RealPlaying item
                 , playSrc = Nothing
                 , subtitles = []
+                , chapters = []
                 , ccOn = False
                 , videoState = initialVideoState
                 , controlsVisible = True
@@ -151,6 +152,14 @@ update msg model =
             , Cmd.batch
                 [ Api.fetchPlaybackInfo model.token item.id GotPlaybackInfo
                 , Api.fetchSubtitles model.token item.id GotSubtitles
+                , Api.fetchChapters model.token item.id GotChapters
+                , -- m74: next-episode needs the series payload; fetch it when
+                  -- the player was not opened from the series page
+                  if isEpisodeItem item && not (seriesDetailMatches model item) then
+                    Api.fetchSeriesSearch model.token (Maybe.withDefault "" item.seriesName) GotSeriesSearch
+
+                  else
+                    Cmd.none
                 ]
             )
 
@@ -167,6 +176,45 @@ update msg model =
 
                     else
                         ( { model | subtitles = [] }, Cmd.none )
+
+        GotChapters result ->
+            case result of
+                Ok chs ->
+                    ( { model | chapters = chs }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        ( { model | needsAuth = True }, Cmd.none )
+
+                    else
+                        ( { model | chapters = [] }, Cmd.none )
+
+        SkipIntro ->
+            -- m74: jump to the end of the intro range
+            let
+                isEp =
+                    nowPlayingItem model |> Maybe.map isEpisodeItem |> Maybe.withDefault False
+            in
+            case Types.introRange isEp model.chapters model.videoState.duration of
+                Just ( _, end ) ->
+                    ( model, Ports.videoCommand { action = "seek", value = end } )
+
+                Nothing ->
+                    ( model, Cmd.none )
+
+        PlayNextEpisode ->
+            -- m74: play the next downloaded episode of the same series
+            case nowPlayingItem model of
+                Just item ->
+                    case Types.nextEpisodeItem model.library model.seriesDetail item of
+                        Just next ->
+                            update (OpenRealPlayer next) model
+
+                        Nothing ->
+                            ( model, Cmd.none )
+
+                Nothing ->
+                    ( model, Cmd.none )
 
         ToggleCC ->
             -- m70: cycle off -> first track -> off (index = -1 means off)
@@ -854,3 +902,32 @@ httpErrorToString err =
 
         Http.BadBody body ->
             "unexpected response: " ++ body
+
+
+
+{-| m74: the item currently in the real player, if any. -}
+nowPlayingItem : Types.Model -> Maybe Api.Item
+nowPlayingItem model =
+    case model.nowPlaying of
+        Types.RealPlaying item ->
+            Just item
+
+        _ ->
+            Nothing
+
+
+{-| m74: is this library item an episode? -}
+isEpisodeItem : Api.Item -> Bool
+isEpisodeItem item =
+    String.toLower item.itemType == "episode"
+
+
+{-| m74: does the loaded series detail belong to this episode's series? -}
+seriesDetailMatches : Types.Model -> Api.Item -> Bool
+seriesDetailMatches model item =
+    case ( model.seriesDetail, item.seriesName ) of
+        ( Just detail, Just sn ) ->
+            String.toLower (Maybe.withDefault "" detail.name) == String.toLower sn
+
+        _ ->
+            False

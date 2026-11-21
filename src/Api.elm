@@ -39,7 +39,9 @@ module Api exposing
     , itemMetadataDecoder
     , searchIndexers
     , searchIndexersTv
+    , Chapter
     , SubtitleEntry
+    , fetchChapters
     , fetchSubtitles
     , subtitleUrl
     , searchReleases
@@ -431,6 +433,37 @@ subtitleEntryDecoder =
         (Decode.field "format" Decode.string)
         -- external-file entries omit "embedded" entirely (m70 fix)
         (Decode.map (Maybe.withDefault False) (Decode.maybe (Decode.field "embedded" Decode.bool)))
+
+
+{-| m74: one chapter of GET /Items/:id/Chapters. The name (when the file
+carries named chapters, e.g. "Intro") drives the player's skip-intro. -}
+type alias Chapter =
+    { index : Int
+    , startPositionTicks : Int
+    , name : Maybe String
+    }
+
+
+chapterDecoder : Decoder Chapter
+chapterDecoder =
+    Decode.map3 Chapter
+        (Decode.field "Index" Decode.int)
+        (Decode.field "StartPositionTicks" Decode.int)
+        (Decode.maybe (Decode.field "Name" Decode.string))
+
+
+{-| m74: GET /Items/:id/Chapters - chapter markers of an item. -}
+fetchChapters : Maybe String -> String -> (Result Http.Error (List Chapter) -> msg) -> Cmd msg
+fetchChapters token itemId toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Items/" ++ itemId ++ "/Chapters"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg (Decode.list chapterDecoder)
+        , timeout = Nothing
+        , tracker = Nothing
+        }
 
 
 {-| m70: GET /Items/:id/subtitles - the subtitle sources of an item. -}

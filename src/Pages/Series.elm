@@ -259,17 +259,8 @@ pad2 n =
 {-| The library Episode item matching series (case-insensitive) + S/E --
 the same matching the server uses for the Downloaded flag. -}
 findLibraryItem : List Api.Item -> String -> Int -> Int -> Maybe Api.Item
-findLibraryItem library seriesName season ep =
-    List.head
-        (List.filter
-            (\i ->
-                String.toLower i.itemType == "episode"
-                    && String.toLower (Maybe.withDefault "" i.seriesName) == String.toLower seriesName
-                    && i.itemSeason == Just season
-                    && i.itemEpisode == Just ep
-            )
-            library
-        )
+findLibraryItem =
+    Types.findLibraryItem
 
 
 {-| m54: one <option> per season; season 0 is labelled SPECIALS. -}

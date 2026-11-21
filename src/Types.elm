@@ -6,6 +6,9 @@ module Types exposing
     , Screen(..)
     , Tab(..)
     , VideoState
+    , findLibraryItem
+    , introRange
+    , nextEpisodeItem
     , init
     , initialVideoState
     )
@@ -101,6 +104,7 @@ type alias Model =
     , nowPlaying : NowPlaying
     , playSrc : Maybe String
     , subtitles : List Api.SubtitleEntry
+    , chapters : List Api.Chapter
     , ccOn : Bool
     , videoState : VideoState
     , controlsVisible : Bool
@@ -156,6 +160,7 @@ init _ =
       , nowPlaying = DemoPlaying
       , playSrc = Nothing
       , subtitles = []
+      , chapters = []
       , ccOn = False
       , videoState = initialVideoState
       , controlsVisible = True
@@ -203,6 +208,9 @@ type Msg
     | OpenRealPlayer Api.Item
     | GotPlaybackInfo (Result Http.Error Api.PlaybackInfo)
     | GotSubtitles (Result Http.Error (List Api.SubtitleEntry))
+    | GotChapters (Result Http.Error (List Api.Chapter))
+    | SkipIntro
+    | PlayNextEpisode
     | ToggleCC
     | BackFromPlayer
     | SetFilter (Maybe Genre)
@@ -253,3 +261,100 @@ type Msg
     | SignOut
     | GotUnauthorized
     | NoOp
+
+
+{-| The library Episode item matching series (case-insensitive) + S/E --
+the same matching the server uses for the Downloaded flag. Shared by the
+series page and the player's next-episode (m74). -}
+findLibraryItem : List Api.Item -> String -> Int -> Int -> Maybe Api.Item
+findLibraryItem library seriesName season ep =
+    List.head
+        (List.filter
+            (\i ->
+                String.toLower i.itemType == "episode"
+                    && String.toLower (Maybe.withDefault "" i.seriesName) == String.toLower seriesName
+                    && i.itemSeason == Just season
+                    && i.itemEpisode == Just ep
+            )
+            library
+        )
+
+
+{-| m74: the intro range of an item as (startSeconds, endSeconds), if any.
+A chapter NAMED "intro"/"opening" wins (real chapter markers); otherwise,
+for episodes longer than 10 minutes whose first chapter starts at 0 (the
+server falls back to evenly spaced unnamed chapters), the first chapter is
+treated as the intro. -}
+introRange : Bool -> List Api.Chapter -> Float -> Maybe (Float, Float)
+introRange isEpisode chapters duration =
+    let
+        secs c =
+            toFloat c.startPositionTicks / 1e7
+
+        isIntroName n =
+            let
+                l =
+                    String.toLower n
+            in
+            String.contains "intro" l || String.contains "opening" l
+
+        chapterEnd c =
+            case List.head (List.filter (\n -> secs n > secs c) chapters) of
+                Just n ->
+                    secs n
+
+                Nothing ->
+                    duration
+
+        named =
+            List.filter (\c -> Maybe.withDefault False (Maybe.map isIntroName c.name)) chapters
+    in
+    case named of
+        (c :: _) ->
+            Just (secs c, chapterEnd c)
+
+        [] ->
+            case chapters of
+                (c :: _) ->
+                    if isEpisode && duration > 600 && secs c <= 0.001 then
+                        Just (0, chapterEnd c)
+
+                    else
+                        Nothing
+
+                _ ->
+                    Nothing
+
+
+{-| m74: the next DOWNLOADED episode of the same series after the given
+item, resolved to a library item (so it can be played), or Nothing. -}
+nextEpisodeItem : List Api.Item -> Maybe Api.SeriesDetail -> Api.Item -> Maybe Api.Item
+nextEpisodeItem library mDetail item =
+    case ( item.seriesName, item.itemSeason, item.itemEpisode ) of
+        ( Just sn, Just se, Just ep ) ->
+            case mDetail of
+                Just detail ->
+                    let
+                        downloaded =
+                            detail.seasons
+                                |> List.filter (\s -> s.seasonNumber > 0)
+                                |> List.concatMap
+                                    (\s ->
+                                        s.episodes
+                                            |> List.filter .downloaded
+                                            |> List.map (\e -> ( s.seasonNumber, e.episodeNumber ))
+                                    )
+                                |> List.sort
+
+                        after =
+                            List.filter (\( s2, e2 ) -> ( s2, e2 ) > ( se, ep )) downloaded
+                    in
+                    after
+                        |> List.head
+                        |> Maybe.andThen (\( s2, e2 ) -> findLibraryItem library sn s2 e2)
+
+                Nothing ->
+                    Nothing
+
+        _ ->
+            Nothing
