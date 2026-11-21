@@ -78,23 +78,27 @@ suite =
 
                     Err err ->
                         Expect.fail (Decode.errorToString err)
-        , test "m77 itemDecoder reads path (lowercase) and playerFileName shows the file name with extension" <|
+        , test "m77 itemDecoder reads path (lowercase) and displayTitle falls back to the file title" <|
             \() ->
                 case Decode.decodeString Api.itemDecoder "{\"id\":\"4\",\"title\":\"Shrek.2001.1080p\",\"size\":1,\"mime\":\"video/x-matroska\",\"path\":\"/lib/Shrek.2001.1080p.BluRay.x265-LAMA.mkv\"}" of
                     Ok item ->
                         Expect.all
                             [ \i -> Expect.equal "4" i.id
                             , \i -> Expect.equal "/lib/Shrek.2001.1080p.BluRay.x265-LAMA.mkv" i.path
-                            , \i -> Expect.equal "Shrek.2001.1080p.BluRay.x265-LAMA.mkv" (Api.playerFileName i)
+                            , \i -> Expect.equal "Shrek.2001.1080p" i.displayTitle
                             ]
                             item
 
                     Err _ ->
                         Expect.fail "itemDecoder should parse path"
-        , test "m77 playerFileName falls back to title when path is empty" <|
+        , test "m77 itemDecoder with displayTitle uses the pretty name (player shows this, not the file)" <|
             \() ->
-                Expect.equal "Shrek.2001.1080p"
-                    (Api.playerFileName { id = "4", title = "Shrek.2001.1080p", size = 1, mime = "video/x-matroska", displayTitle = "Shrek", itemType = "movie", seriesName = Nothing, itemSeason = Nothing, itemEpisode = Nothing, genres = [], path = "" })
+                case Decode.decodeString Api.itemDecoder "{\"id\":\"4\",\"title\":\"Shrek.2001.1080p\",\"size\":1,\"mime\":\"video/x-matroska\",\"displayTitle\":\"Shrek\",\"path\":\"/lib/Shrek.mkv\"}" of
+                    Ok item ->
+                        Expect.equal "Shrek" item.displayTitle
+
+                    Err _ ->
+                        Expect.fail "itemDecoder should parse displayTitle"
         , test "m66 discoverItemDecoder tolerates missing OriginalName/OriginalLanguage (old server)" <|
             \_ ->
                 case Decode.decodeString Api.discoverItemDecoder

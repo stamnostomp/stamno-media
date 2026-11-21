@@ -47,8 +47,6 @@ module Api exposing
     , streamUrl
     , transcodingSrc
     
-    , playerFileName
-    , fileNameOf
     , itemDecoder)
 
 {-| Client for the functonal-media-server HTTP API. Progress reporting
@@ -83,28 +81,6 @@ type alias Item =
     , path : String
     }
 
-
-{-| m77: the file name (last path segment, WITH extension) of an item path;
-falls back to the whole string when there is no slash. -}
-fileNameOf : String -> String
-fileNameOf path =
-    case List.reverse (String.split "/" path) of
-        name :: _ ->
-            name
-
-        [] ->
-            path
-
-
-{-| m77: the label the player header shows — the real FILE name (with
-`extension`), falling back to the base title when the path is unknown. -}
-playerFileName : Item -> String
-playerFileName item =
-    if String.isEmpty item.path then
-        item.title
-
-    else
-        fileNameOf item.path
 
 
 {-| m40: optional displayTitle (server sends the TMDB title); falls back
