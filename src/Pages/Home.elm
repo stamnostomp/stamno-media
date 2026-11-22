@@ -1,10 +1,12 @@
 module Pages.Home exposing (view)
 
 import Api
-import Components exposing (continueWatchingCard, libraryRowCard)
+import Components exposing (continueWatchingCard, libraryRowCard, posterImage)
+import Dict
 import Html exposing (Html, button, div, text)
 import Html.Attributes exposing (class, id, style)
 import Html.Events exposing (onClick)
+import String
 import Types exposing (Model, Msg(..))
 
 
@@ -15,7 +17,7 @@ view model =
         , div [ class "ph4 pt4 pb5 flex flex-column gap-7" ]
             [ viewMaybeRow "Continue Watching" "row-continue" (continueWatchingCard model.token) model.continueWatching
             , viewMaybeRow "Trending Now" "row-trending" (libraryRowCard model.token) model.popular
-            , viewMaybeRow "Recently Added" "row-recent" (libraryRowCard model.token) model.newItems
+            , viewRecentRow model
             ]
         ]
 
@@ -67,6 +69,94 @@ viewHero model =
                     ]
                 ]
         )
+
+
+{-| m84: "Recently Added" groups episodes by series - one card per series
+(click opens the series page, like the Shows tab) instead of one card per
+episode. Movies and other items stay individual cards. -}
+viewRecentRow : Model -> Html Msg
+viewRecentRow model =
+    let
+        entries =
+            groupRecent model.newItems
+    in
+    if List.isEmpty entries then
+        text ""
+
+    else
+        viewRow "Recently Added" "row-recent" (recentCard model.token) entries
+
+
+type RecentEntry
+    = RecentItem Api.Item
+    | RecentSeries String (List Api.Item)
+
+
+recentCard : Maybe String -> RecentEntry -> Html Msg
+recentCard token entry =
+    case entry of
+        RecentItem item ->
+            libraryRowCard token item
+
+        RecentSeries series eps ->
+            recentSeriesCard token series eps
+
+
+{-| Collapse episodes into their series group at the position of the
+newest episode; non-episodes pass through. -}
+groupRecent : List Api.Item -> List RecentEntry
+groupRecent items =
+    let
+        step item ( dict, acc ) =
+            if isEpisode item then
+                let
+                    key =
+                        Maybe.withDefault "OTHER" item.seriesName
+                in
+                case Dict.get key dict of
+                    Just _ ->
+                        ( Dict.update key (Maybe.map (\eps -> eps ++ [ item ])) dict, acc )
+
+                    Nothing ->
+                        ( Dict.insert key [ item ] dict, acc ++ [ RecentSeries key [ item ] ] )
+
+            else
+                ( dict, acc ++ [ RecentItem item ] )
+    in
+    Tuple.second (List.foldl step ( Dict.empty, [] ) items)
+
+
+isEpisode : Api.Item -> Bool
+isEpisode i =
+    String.toLower i.itemType == "episode" || i.seriesName /= Nothing
+
+
+{-| Row-sized series card: poster of the newest episode, episode count on
+top, series name at the bottom; click opens the series page. -}
+recentSeriesCard : Maybe String -> String -> List Api.Item -> Html Msg
+recentSeriesCard token series eps =
+    case List.head eps of
+        Nothing ->
+            text ""
+
+        Just ep ->
+            div
+                [ class "poster relative pointer flex-none"
+                , style "width" "160px"
+                , style "height" "240px"
+                , onClick (OpenSeries series)
+                ]
+                [ div
+                    [ class "absolute absolute--fill flex items-center justify-center fg-ghost b"
+                    , style "font-size" "64px"
+                    ]
+                    [ text (String.left 1 series) ]
+                , posterImage token ep.id
+                , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
+                    [ div [ class "pa2 tr f7 fg-muted" ] [ text (String.fromInt (List.length eps) ++ " EPISODES") ]
+                    , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text series ]
+                    ]
+                ]
 
 
 {-| Omits the row entirely (rather than showing an empty scroller) when
