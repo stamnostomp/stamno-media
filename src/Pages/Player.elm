@@ -15,7 +15,7 @@ view model =
         RealPlaying item ->
             -- m32: pass the token so the <video src> can carry api_key=
             -- m74: skip-intro range + next downloaded episode for episodes
-            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress model.subtitles model.ccOn model.intro (nextEpisodeItem model.library model.seriesDetail item)
+            viewReal item model.token model.playSrc model.videoState model.controlsVisible model.resumeProgress model.subtitles model.ccOn model.intro (nextEpisodeItem model.library model.seriesDetail item) model.playDuration
 
         DemoPlaying ->
             viewDemo model.activeId
@@ -42,8 +42,8 @@ the video carries a `data-resume-percent` attribute that index.html's JS
 reads once, on `loadedmetadata`, to seek to that position before playback
 is visible to the user.
 -}
-viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> List Api.SubtitleEntry -> Bool -> Maybe ( Float, Float ) -> Maybe Api.Item -> Html Msg
-viewReal item token playSrc videoState controlsVisible maybeResumeProgress subtitles ccOn intro nextEp =
+viewReal : Api.Item -> Maybe String -> Maybe String -> VideoState -> Bool -> Maybe Int -> List Api.SubtitleEntry -> Bool -> Maybe ( Float, Float ) -> Maybe Api.Item -> Maybe Float -> Html Msg
+viewReal item token playSrc videoState controlsVisible maybeResumeProgress subtitles ccOn intro nextEp realDur =
     div
         [ id "player-stage"
         , class "fixed top-0 left-0 w-100 vh-100 overflow-hidden"
@@ -55,6 +55,8 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress subti
             , Attr.attribute "data-item-id" item.id
             , Attr.attribute "data-resume-percent"
                 (maybeResumeProgress |> Maybe.map String.fromInt |> Maybe.withDefault "")
+            , Attr.attribute "data-real-duration"
+                (realDur |> Maybe.map String.fromFloat |> Maybe.withDefault "")
             , autoplay True
             , src (Maybe.withDefault (Api.streamUrl token item.id) playSrc)
             , onClick VideoTogglePlay

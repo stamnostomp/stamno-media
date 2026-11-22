@@ -30,6 +30,7 @@ module Api exposing
     , fetchItemMetadata
     , fetchNew
     , fetchPlaybackInfo
+    , playbackDurationSeconds
     , fetchPopular
     , fetchRequests
     , fetchSeriesEpisodes
@@ -580,14 +581,51 @@ TranscodingUrl. -}
 type alias PlaybackInfo =
     { playMethod : String
     , transcodingUrl : Maybe String
+    , mediaSources : List MediaSource
     }
+
+
+{-| m86: one MediaSource of PlaybackInfo (only the streams matter here). -}
+type alias MediaSource =
+    { mediaStreams : List MediaStream
+    }
+
+
+type alias MediaStream =
+    { durationSeconds : Maybe Float
+    }
+
+
+mediaStreamDecoder : Decoder MediaStream
+mediaStreamDecoder =
+    Decode.map MediaStream
+        (Decode.maybe (Decode.field "DurationSeconds" Decode.float))
+
+
+mediaSourceDecoder : Decoder MediaSource
+mediaSourceDecoder =
+    Decode.map MediaSource
+        (Decode.maybe (Decode.field "MediaStreams" (Decode.list mediaStreamDecoder)) |> Decode.map (Maybe.withDefault []))
 
 
 playbackInfoDecoder : Decoder PlaybackInfo
 playbackInfoDecoder =
-    Decode.map2 PlaybackInfo
+    Decode.map3 PlaybackInfo
         (Decode.field "PlayMethod" Decode.string)
         (Decode.maybe (Decode.field "TranscodingUrl" Decode.string))
+        (Decode.maybe (Decode.field "MediaSources" (Decode.list mediaSourceDecoder)) |> Decode.map (Maybe.withDefault []))
+
+
+{-| m86: authoritative total duration (seconds) from the probed media
+streams - the longest stream duration. Used as the player's real duration
+when the browser's own <video> duration is unknown/growing (chunked
+direct-play, in-progress HLS playlists). -}
+playbackDurationSeconds : PlaybackInfo -> Maybe Float
+playbackDurationSeconds pi =
+    pi.mediaSources
+        |> List.concatMap .mediaStreams
+        |> List.filterMap .durationSeconds
+        |> List.maximum
 
 
 {-| m70: one entry of GET /Items/:id/subtitles (external file or embedded

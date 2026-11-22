@@ -217,6 +217,7 @@ update msg model =
                 | screen = Player
                 , nowPlaying = RealPlaying item
                 , playSrc = Nothing
+                , playDuration = Nothing
                 , subtitles = []
                 , intro = Nothing
                 , ccOn = False
@@ -316,6 +317,8 @@ update msg model =
                 Ok pi ->
                     -- m33: Transcode -> use the TranscodingUrl (with api_key);
                     -- DirectPlay -> playSrc stays Nothing (plain /stream/:id)
+                    -- m86: also capture the probed real duration so the seek
+                    -- bar/clock use it instead of the browser's growing one.
                     let
                         src =
                             if pi.playMethod == "Transcode" then
@@ -324,7 +327,7 @@ update msg model =
                             else
                                 Nothing
                     in
-                    ( { model | playSrc = src }, Cmd.none )
+                    ( { model | playSrc = src, playDuration = Api.playbackDurationSeconds pi }, Cmd.none )
 
                 Err err ->
                     if isUnauthorized err then
@@ -851,7 +854,20 @@ update msg model =
             ( model, Ports.videoCommand { action = "fullscreen", value = 0 } )
 
         GotVideoStatus status ->
-            ( { model | videoState = status }, Cmd.none )
+            -- m86: when the server probed a real duration, it wins over the
+            -- browser's <video> duration (which is 0/unknown for chunked
+            -- direct-play and grows segment-by-segment for in-progress HLS),
+            -- so the bar, clock and next-episode timing are always correct.
+            let
+                withRealDur =
+                    case model.playDuration of
+                        Just d ->
+                            { status | duration = d }
+
+                        Nothing ->
+                            status
+            in
+            ( { model | videoState = withRealDur }, Cmd.none )
 
         PlayerActivity ->
             ( { model | idleTime = 0, controlsVisible = True }, Cmd.none )

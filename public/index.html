@@ -110,12 +110,22 @@
       }
     });
 
+    // m86: the authoritative duration is the server-probed one
+    // (data-real-duration, set from PlaybackInfo MediaStreams) whenever the
+    // browser's own v.duration is unknown (chunked direct-play) or still
+    // growing (in-progress HLS playlist) - otherwise the seek bar/clock
+    // jump as chunks arrive.
+    function realDuration(v) {
+      if (isFinite(v.duration) && v.duration > 0) return v.duration;
+      var d = parseFloat(v.dataset.realDuration || '');
+      return isFinite(d) ? d : 0;
+    }
     function reportVideoStatus() {
       var v = document.getElementById('media-player');
       if (!v) return;
       app.ports.videoStatus.send({
         currentTime: v.currentTime || 0,
-        duration: isFinite(v.duration) ? v.duration : 0,
+        duration: realDuration(v),
         paused: v.paused,
         muted: v.muted,
         volume: v.volume
@@ -143,8 +153,9 @@
       var v = event.target;
       if (!v || v.id !== 'media-player') return;
       var resumePercent = v.dataset.resumePercent;
-      if (resumePercent && isFinite(v.duration)) {
-        v.currentTime = v.duration * (parseFloat(resumePercent) / 100);
+      var dur = realDuration(v);
+      if (resumePercent && dur > 0) {
+        v.currentTime = dur * (parseFloat(resumePercent) / 100);
       }
       delete v.dataset.resumePercent;
     }, true);
@@ -192,13 +203,15 @@
     }
     function sendProgress() {
       var v = document.getElementById('media-player');
-      if (!v || !v.duration || !isFinite(v.duration)) return;
+      if (!v) return;
+      var dur = realDuration(v);
+      if (!dur) return;
       var itemId = v.dataset.itemId;
       if (!itemId) return;
       fetch(API_BASE + '/progress' + tokenQ(), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ id: itemId, currentTime: v.currentTime, duration: v.duration })
+        body: JSON.stringify({ id: itemId, currentTime: v.currentTime, duration: dur })
       }).catch(function() {});
       sendSession(itemId, false);
     }

@@ -105,6 +105,7 @@ type alias Model =
     , newItems : List Api.Item
     , nowPlaying : NowPlaying
     , playSrc : Maybe String
+    , playDuration : Maybe Float
     , subtitles : List Api.SubtitleEntry
     , intro : Maybe ( Float, Float )
     , ccOn : Bool
@@ -169,6 +170,7 @@ init _ =
       , newItems = []
       , nowPlaying = DemoPlaying
       , playSrc = Nothing
+      , playDuration = Nothing
       , subtitles = []
       , intro = Nothing
       , ccOn = False
