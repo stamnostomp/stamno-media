@@ -1,7 +1,7 @@
 module Pages.Library exposing (view)
 
 import Api
-import Components exposing (libraryCard)
+import Components exposing (displayGridCard, groupForDisplay)
 import Html exposing (Html, div, text)
 import Html.Attributes exposing (class)
 import Types exposing (Model, Msg)
@@ -33,7 +33,7 @@ view pageTitle model =
                 ]
 
           else
-            div [ class "grid-fill" ] (List.map (libraryCard model.token) results)
+            div [ class "grid-fill" ] (List.map (displayGridCard model.token model.library) (groupForDisplay results))
         ]
 
 

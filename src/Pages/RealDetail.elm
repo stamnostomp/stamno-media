@@ -1,7 +1,7 @@
 module Pages.RealDetail exposing (view)
 
 import Api
-import Components exposing (formatBytes, libraryRowCard, posterImage)
+import Components exposing (displayRowCard, formatBytes, groupForDisplay, posterImage)
 import Html exposing (Html, button, div, input, span, text)
 import Html.Attributes exposing (class, disabled, placeholder, style, value)
 import Html.Events exposing (onClick, onInput)
@@ -94,8 +94,9 @@ seriesDetailView model item seriesName =
             , div [ class "row-scroll flex gap-4" ]
                 (model.library
                     |> List.filter (\i -> i.id /= item.id)
+                    |> groupForDisplay
                     |> List.take 10
-                    |> List.map (libraryRowCard model.token)
+                    |> List.map (displayRowCard model.token model.library)
                 )
             ]
         ]
@@ -223,8 +224,9 @@ itemDetailView model item =
                     , div [ class "row-scroll flex gap-4" ]
                         (model.library
                             |> List.filter (\i -> i.id /= item.id)
+                            |> groupForDisplay
                             |> List.take 10
-                            |> List.map (libraryRowCard model.token)
+                            |> List.map (displayRowCard model.token model.library)
                         )
                     ]
                 ]
