@@ -84,7 +84,7 @@ viewRecentRow model =
         text ""
 
     else
-        viewRow "Recently Added" "row-recent" (recentCard model.token) entries
+        viewRow "Recently Added" "row-recent" (recentCard model.token model.library) entries
 
 
 type RecentEntry
@@ -92,14 +92,14 @@ type RecentEntry
     | RecentSeries String (List Api.Item)
 
 
-recentCard : Maybe String -> RecentEntry -> Html Msg
-recentCard token entry =
+recentCard : Maybe String -> List Api.Item -> RecentEntry -> Html Msg
+recentCard token library entry =
     case entry of
         RecentItem item ->
             libraryRowCard token item
 
         RecentSeries series eps ->
-            recentSeriesCard token series eps
+            recentSeriesCard token series eps (seriesEpisodeCount library series)
 
 
 {-| Collapse episodes into their series group at the position of the
@@ -131,10 +131,17 @@ isEpisode i =
     String.toLower i.itemType == "episode" || i.seriesName /= Nothing
 
 
+{-| Total episodes of the series in the whole library (not just the /new
+window), so the badge is the real count. -}
+seriesEpisodeCount : List Api.Item -> String -> Int
+seriesEpisodeCount library series =
+    List.length (List.filter (\i -> isEpisode i && i.seriesName == Just series) library)
+
+
 {-| Row-sized series card: poster of the newest episode, episode count on
 top, series name at the bottom; click opens the series page. -}
-recentSeriesCard : Maybe String -> String -> List Api.Item -> Html Msg
-recentSeriesCard token series eps =
+recentSeriesCard : Maybe String -> String -> List Api.Item -> Int -> Html Msg
+recentSeriesCard token series eps count =
     case List.head eps of
         Nothing ->
             text ""
@@ -153,7 +160,7 @@ recentSeriesCard token series eps =
                     [ text (String.left 1 series) ]
                 , posterImage token ep.id
                 , div [ class "reveal absolute absolute--fill flex flex-column justify-between" ]
-                    [ div [ class "pa2 tr f7 fg-muted" ] [ text (String.fromInt (List.length eps) ++ " EPISODES") ]
+                    [ div [ class "pa2 tr f7 fg-muted" ] [ text (String.fromInt count ++ (if count == 1 then " EPISODE" else " EPISODES")) ]
                     , div [ class "w-100 pa2 fade-up f7 ttu tracked-wide" ] [ text series ]
                     ]
                 ]
