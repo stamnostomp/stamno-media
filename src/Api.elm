@@ -23,6 +23,8 @@ module Api exposing
     , authHeader
     , createRequest
     , fetchAuth
+    , fetchMe
+    , MeResult
     , fetchContinueWatching
     , fetchDiscoverPopular
     , fetchDiscoverSearch
@@ -356,6 +358,42 @@ type alias AuthResult =
     , userName : String
     , isAdmin : Bool
     }
+
+
+{-| m87: GET /Users/Me - the user behind the current token (for restoring
+the admin flag after a page reload with a stored token). -}
+type alias MeResult =
+    { userName : String
+    , isAdmin : Bool
+    }
+
+
+meDecoder : Decoder MeResult
+meDecoder =
+    Decode.map2 MeResult
+        (Decode.oneOf
+            [ Decode.field "Name" Decode.string
+            , Decode.field "name" Decode.string
+            ]
+        )
+        (Decode.oneOf
+            [ Decode.field "IsAdministrator" Decode.bool
+            , Decode.field "isAdministrator" Decode.bool
+            ]
+        )
+
+
+fetchMe : Maybe String -> (Result Http.Error MeResult -> msg) -> Cmd msg
+fetchMe token toMsg =
+    Http.request
+        { method = "GET"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Users/Me"
+        , body = Http.emptyBody
+        , expect = Http.expectJson toMsg meDecoder
+        , timeout = Nothing
+        , tracker = Nothing
+        }
 
 
 authResultDecoder : Decoder AuthResult

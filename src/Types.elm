@@ -278,6 +278,7 @@ type Msg
     | ToggleUserMenu
     | CloseUserMenu
     | GotStoredToken String
+    | GotMe (Result Http.Error Api.MeResult)
     | SetLoginUser String
     | SetLoginPass String
     | SubmitLogin

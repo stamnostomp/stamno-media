@@ -761,7 +761,24 @@ update msg model =
                 ( model, Cmd.none )
 
             else
-                ( { model | token = Just stored }, fetchAll (Just stored) )
+                -- m87: also resolve the user behind the stored token so the
+                -- admin-only UI (METADATA picker, dashboard) survives reloads
+                ( { model | token = Just stored }
+                , Cmd.batch [ fetchAll (Just stored), Api.fetchMe (Just stored) GotMe ]
+                )
+
+        GotMe result ->
+            case result of
+                Ok me ->
+                    ( { model | authUser = Just { name = me.userName, isAdmin = me.isAdmin } }, Cmd.none )
+
+                Err err ->
+                    if isUnauthorized err then
+                        -- stale/invalid stored token: drop back to the login screen
+                        ( { model | token = Nothing, authUser = Nothing, needsAuth = True }, Ports.storeToken "" )
+
+                    else
+                        ( model, Cmd.none )
 
         SetLoginUser v ->
             ( { model | loginUser = v }, Cmd.none )
