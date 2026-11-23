@@ -35,6 +35,7 @@ module Api exposing
     , playbackDurationSeconds
     , fetchPopular
     , fetchRequests
+    , RequestsPage
     , fetchSeriesEpisodes
     , fetchSeriesSearch
     , fetchTrackers
@@ -911,15 +912,30 @@ encodeCreateRequest p =
 
 
 {-| GET /Requests -> the {"Requests": [...]} envelope (non-admins get only
-their own requests). -}
-fetchRequests : Maybe String -> (Result Http.Error (List RequestEntry) -> msg) -> Cmd msg
+their own requests). m92: also carries the optional top-level DownloaderError
+(set when the Deluge status poll failed, so the UI can warn instead of
+showing stale null progress). -}
+type alias RequestsPage =
+    { entries : List RequestEntry
+    , downloaderError : Maybe String
+    }
+
+
+requestsPageDecoder : Decoder RequestsPage
+requestsPageDecoder =
+    Decode.map2 RequestsPage
+        (Decode.field "Requests" (Decode.list requestEntryDecoder))
+        (Decode.maybe (Decode.field "DownloaderError" Decode.string))
+
+
+fetchRequests : Maybe String -> (Result Http.Error RequestsPage -> msg) -> Cmd msg
 fetchRequests token toMsg =
     Http.request
         { method = "GET"
         , headers = authHeader token
         , url = baseUrl ++ "/Requests"
         , body = Http.emptyBody
-        , expect = Http.expectJson toMsg (Decode.field "Requests" (Decode.list requestEntryDecoder))
+        , expect = Http.expectJson toMsg requestsPageDecoder
         , timeout = Nothing
         , tracker = Nothing
         }

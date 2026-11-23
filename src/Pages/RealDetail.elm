@@ -247,7 +247,7 @@ fallbackDesc it =
     -- m91: no raw filename/filetype dump when there is no overview; just say
     -- so and hint at the admin METADATA button (TMDB re-link)
     "No description available for "
-        ++ it.title
+        ++ (if String.isEmpty it.displayTitle then it.title else it.displayTitle)
         ++ " yet ("
         ++ formatBytes it.size
         ++ "). An admin can match it to TMDB with the METADATA button."

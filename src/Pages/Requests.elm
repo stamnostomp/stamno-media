@@ -74,12 +74,21 @@ tab current label target =
 {-| Mine tab: the request queue returned by GET /Requests. -}
 viewMine : Model -> Html Msg
 viewMine model =
-    if List.isEmpty model.myRequests then
-        div [ class "f7 fg-muted ttu tracked-wide pa3 bt b--default" ] [ text "NO REQUESTS YET" ]
+    div []
+        [ case model.downloaderError of
+            Just err ->
+                div [ class "f7 pa2 mb2 ba b--strong fg-primary" ]
+                    [ text ("Download client unreachable: " ++ err ++ " - statuses may be stale. Check the deluge daemon.") ]
 
-    else
-        div [ class "flex flex-column bt b--default" ]
-            (List.map viewRequestRow model.myRequests)
+            Nothing ->
+                text ""
+        , if List.isEmpty model.myRequests then
+            div [ class "f7 fg-muted ttu tracked-wide pa3 bt b--default" ] [ text "NO REQUESTS YET" ]
+
+          else
+            div [ class "flex flex-column bt b--default" ]
+                (List.map viewRequestRow model.myRequests)
+        ]
 
 
 viewRequestRow : Api.RequestEntry -> Html Msg

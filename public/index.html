@@ -144,9 +144,14 @@
     // growing (in-progress HLS playlist) - otherwise the seek bar/clock
     // jump as chunks arrive.
     function realDuration(v) {
-      if (isFinite(v.duration) && v.duration > 0) return v.duration;
+      // m92: the server-probed data-real-duration is authoritative whenever
+      // present. During a growing (in-progress) HLS transcode v.duration is
+      // finite but PARTIAL, and using it corrupted /progress percentages
+      // (ct/partial) and the seek bar.
       var d = parseFloat(v.dataset.realDuration || '');
-      return isFinite(d) ? d : 0;
+      if (isFinite(d) && d > 0) return d;
+      if (isFinite(v.duration) && v.duration > 0) return v.duration;
+      return 0;
     }
     function reportVideoStatus() {
       var v = document.getElementById('media-player');

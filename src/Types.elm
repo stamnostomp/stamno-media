@@ -80,6 +80,7 @@ type alias Model =
     , search : String
     , requestsTab : Tab
     , myRequests : List Api.RequestEntry
+    , downloaderError : Maybe String   -- m92: last Deluge poll error from /Requests
     , trackers : List Api.Tracker
     , activeTracker : Maybe String
     , reqQuery : String
@@ -133,6 +134,8 @@ type alias Model =
     , metaQuery : String
     , metaResults : List Api.RemoteSearchResult
     , metaBusy : Bool
+    , metaRetried : Bool   -- m92: one automatic retry of a failed TMDB remote search
+    , metaType : String    -- m92: the type (movie/tv) of the in-flight meta search
     , metaNote : Maybe String
     }
 
@@ -145,6 +148,7 @@ init _ =
       , search = ""
       , requestsTab = Mine
       , myRequests = []
+      , downloaderError = Nothing
       , trackers = []
       , activeTracker = Nothing
       , reqQuery = ""
@@ -198,6 +202,8 @@ init _ =
       , metaQuery = ""
       , metaResults = []
       , metaBusy = False
+      , metaRetried = False
+      , metaType = "movie"
       , metaNote = Nothing
       }
     , Cmd.batch
@@ -242,7 +248,7 @@ type Msg
     | CycleMovieSort
     | SetSearch String
     | SetTab Tab
-    | GotRequests (Result Http.Error (List Api.RequestEntry))
+    | GotRequests (Result Http.Error Api.RequestsPage)
     | GotTrackers (Result Http.Error (List Api.Tracker))
     | SetReqQuery String
     | SearchReleases

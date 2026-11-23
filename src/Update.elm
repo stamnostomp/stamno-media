@@ -96,21 +96,29 @@ update msg model =
                             else
                                 "movie"
                     in
-                    ( { model | metaBusy = True, metaNote = Nothing }
+                    ( { model | metaBusy = True, metaNote = Nothing, metaRetried = False, metaType = ty }
                     , Api.fetchRemoteSearch model.token model.metaQuery ty GotRemoteSearch
                     )
 
         GotRemoteSearch result ->
             case result of
                 Ok rs ->
-                    ( { model | metaResults = rs, metaBusy = False }
+                    ( { model | metaResults = rs, metaBusy = False, metaRetried = False }
                     , Cmd.none
                     )
 
                 Err _ ->
-                    ( { model | metaBusy = False, metaNote = Just "SEARCH FAILED" }
-                    , Cmd.none
-                    )
+                    -- m92: one automatic retry before showing SEARCH FAILED
+                    -- (transient TMDB/rate-limit blips are common)
+                    if model.metaRetried then
+                        ( { model | metaBusy = False, metaRetried = False, metaNote = Just "SEARCH FAILED" }
+                        , Cmd.none
+                        )
+
+                    else
+                        ( { model | metaBusy = True, metaRetried = True, metaNote = Just "RETRYING..." }
+                        , Api.fetchRemoteSearch model.token model.metaQuery model.metaType GotRemoteSearch
+                        )
 
         PickTmdb r ->
             case model.metaPickerFor of
@@ -405,7 +413,7 @@ update msg model =
         GotRequests result ->
             case result of
                 Ok rs ->
-                    ( { model | myRequests = rs, needsAuth = False }, Cmd.none )
+                    ( { model | myRequests = rs.entries, downloaderError = rs.downloaderError, needsAuth = False }, Cmd.none )
 
                 Err err ->
                     if isUnauthorized err then
