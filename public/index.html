@@ -55,9 +55,26 @@
           h.attachMedia(v);
           // m89: the load() above cancels the autoplay attribute, so without
           // this the episode player would sit paused at readyState 0 forever
+          v.dataset.hlsJs = '1';
           h.on(window.Hls.Events.MANIFEST_PARSED, function() {
+            // m90: resume seek. With a growing (live-style) playlist v.duration
+            // here is only what has been remuxed so far and the target is not
+            // buffered yet, so a loadedmetadata seek would be silently dropped.
+            // Use the server-probed data-real-duration instead, then consume the
+            // attribute so loadedmetadata does not seek again with a bad duration.
+            var rp = v.dataset.resumePercent;
+            var rd = parseFloat(v.dataset.realDuration || '');
+            if (rp && isFinite(rd) && rd > 0) {
+              v.currentTime = rd * (parseFloat(rp) / 100);
+            }
+            if (rp) delete v.dataset.resumePercent;
             var p = v.play();
             if (p && p.catch) p.catch(function() {});
+          });
+          // m90: surface only FATAL hls.js errors in the banner (network
+          // errors self-recover; media errors get recovered by hls.js too)
+          h.on(window.Hls.Events.ERROR, function(_evt, data) {
+            if (data && data.fatal) showPlayerError((data.details || 'hls.js fatal error') + ' - the transcode may have failed, try again or pick another release.');
           });
           hlsInstance = h;
           v.dataset.hlsActive = '1';
@@ -139,20 +156,36 @@
         volume: v.volume
       });
     }
-    // m89: surface media errors (e.g. failed transcode) instead of a silent hang
+    // m89/m90: surface media errors (e.g. failed transcode) instead of a silent
+    // hang. The banner is a shared helper so hls.js fatal errors reuse it.
+    function showPlayerError(msg) {
+      var v = document.getElementById('media-player');
+      var banner = document.getElementById('player-error-banner');
+      if (!banner) {
+        banner = document.createElement('div');
+        banner.id = 'player-error-banner';
+        banner.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;background:rgba(120,0,0,0.85);color:#fff;padding:8px 16px;font:13px sans-serif;border-radius:4px;';
+        var stage = document.getElementById('player-stage');
+        if (stage) stage.appendChild(banner); else document.body.appendChild(banner);
+      }
+      banner.textContent = 'Playback error: ' + msg;
+    }
+    function hidePlayerError() {
+      var b = document.getElementById('player-error-banner');
+      if (b) b.remove();
+    }
     document.addEventListener('error', function(event) {
       var v = event.target;
-      if (v && v.id === 'media-player' && v.error) {
-        var banner = document.getElementById('player-error-banner');
-        if (!banner) {
-          banner = document.createElement('div');
-          banner.id = 'player-error-banner';
-          banner.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;background:rgba(120,0,0,0.85);color:#fff;padding:8px 16px;font:13px sans-serif;border-radius:4px;';
-          var stage = document.getElementById('player-stage');
-          if (stage) stage.appendChild(banner); else document.body.appendChild(banner);
-        }
-        banner.textContent = 'Playback error: ' + (v.error.message || ('code ' + v.error.code)) + ' - the transcode may have failed, try again or pick another release.';
+      // m90: when hls.js owns the element the browser's own attempt to demux
+      // the .m3u8 fires a spurious native error before/while hls.js attaches --
+      // ignore it; real problems arrive as hls.js FATAL errors (above).
+      if (v && v.id === 'media-player' && v.error && v.dataset.hlsActive !== '1') {
+        showPlayerError((v.error.message || ('code ' + v.error.code)) + ' - the transcode may have failed, try again or pick another release.');
       }
+    }, true);
+    // m90: once playback actually starts any earlier error is stale -- clear it
+    document.addEventListener('playing', function(event) {
+      if (event.target && event.target.id === 'media-player') hidePlayerError();
     }, true);
     ['loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
       document.addEventListener(evt, function(event) {
@@ -175,6 +208,9 @@
     document.addEventListener('loadedmetadata', function(event) {
       var v = event.target;
       if (!v || v.id !== 'media-player') return;
+      // m90: hls.js path resumes in MANIFEST_PARSED with the server-probed
+      // duration (the growing playlist makes v.duration wrong here)
+      if (v.dataset.hlsJs === '1') return;
       var resumePercent = v.dataset.resumePercent;
       var dur = realDuration(v);
       if (resumePercent && dur > 0) {

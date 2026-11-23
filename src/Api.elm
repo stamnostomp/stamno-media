@@ -832,12 +832,13 @@ type alias Release =
     , downloadUrl : Maybe String
     , magnet : Maybe String
     , trackerId : String
+    , indexerName : Maybe String  -- m90: from IndexerName/Indexer, rows show the name not the UUID
     }
 
 
 releaseDecoder : Decoder Release
 releaseDecoder =
-    Decode.map6 Release
+    Decode.map7 Release
         (Decode.field "Title" Decode.string)
         (Decode.maybe (Decode.field "SizeBytes" Decode.int))
         (Decode.maybe (Decode.field "Seeders" Decode.int))
@@ -849,6 +850,13 @@ releaseDecoder =
             [ Decode.field "IndexerId" Decode.string
             , Decode.field "TrackerId" Decode.string
             ]
+        )
+        (Decode.maybe
+            (Decode.oneOf
+                [ Decode.field "IndexerName" Decode.string
+                , Decode.field "Indexer" Decode.string
+                ]
+            )
         )
 
 

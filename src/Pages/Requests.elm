@@ -298,7 +298,11 @@ releaseRow model idx rel =
                         (List.filter (not << String.isEmpty)
                             [ sizeText rel.sizeBytes
                             , seedersText rel.seeders
-                            , trackerName model rel.trackerId
+                            -- m90: prefer the IndexerName sent with the release;
+                            -- only fall back to the trackers list / UUID
+                            , case rel.indexerName of
+                                Just n -> n
+                                Nothing -> trackerName model rel.trackerId
                             ]
                         )
                     )
