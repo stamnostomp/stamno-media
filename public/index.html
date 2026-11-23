@@ -53,6 +53,12 @@
           var h = new window.Hls({ startPosition: 0, liveSyncDurationCount: 3 });
           h.loadSource(src);
           h.attachMedia(v);
+          // m89: the load() above cancels the autoplay attribute, so without
+          // this the episode player would sit paused at readyState 0 forever
+          h.on(window.Hls.Events.MANIFEST_PARSED, function() {
+            var p = v.play();
+            if (p && p.catch) p.catch(function() {});
+          });
           hlsInstance = h;
           v.dataset.hlsActive = '1';
         } else if (v.canPlayType && v.canPlayType('application/vnd.apple.mpegurl')) {
@@ -133,6 +139,21 @@
         volume: v.volume
       });
     }
+    // m89: surface media errors (e.g. failed transcode) instead of a silent hang
+    document.addEventListener('error', function(event) {
+      var v = event.target;
+      if (v && v.id === 'media-player' && v.error) {
+        var banner = document.getElementById('player-error-banner');
+        if (!banner) {
+          banner = document.createElement('div');
+          banner.id = 'player-error-banner';
+          banner.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;background:rgba(120,0,0,0.85);color:#fff;padding:8px 16px;font:13px sans-serif;border-radius:4px;';
+          var stage = document.getElementById('player-stage');
+          if (stage) stage.appendChild(banner); else document.body.appendChild(banner);
+        }
+        banner.textContent = 'Playback error: ' + (v.error.message || ('code ' + v.error.code)) + ' - the transcode may have failed, try again or pick another release.';
+      }
+    }, true);
     ['loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
       document.addEventListener(evt, function(event) {
         if (event.target && event.target.id === 'media-player') reportVideoStatus();
