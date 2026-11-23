@@ -57,20 +57,23 @@
           // this the episode player would sit paused at readyState 0 forever
           v.dataset.hlsJs = '1';
           h.on(window.Hls.Events.MANIFEST_PARSED, function() {
-            // m90: resume seek. With a growing (live-style) playlist v.duration
-            // here is only what has been remuxed so far and the target is not
-            // buffered yet, so a loadedmetadata seek would be silently dropped.
-            // Use the server-probed data-real-duration instead, then consume the
-            // attribute so loadedmetadata does not seek again with a bad duration.
+            // m90/m91: resume seek. With a growing (live-style) playlist the
+            // target is often not seekable yet at this point, so a one-shot
+            // seek is silently dropped -- store a pending target computed from
+            // the server-probed data-real-duration and let applyPendingResume
+            // fire it once the seekable window covers it.
             var rp = v.dataset.resumePercent;
             var rd = parseFloat(v.dataset.realDuration || '');
             if (rp && isFinite(rd) && rd > 0) {
-              v.currentTime = rd * (parseFloat(rp) / 100);
+              v.dataset.resumeTarget = String(rd * (parseFloat(rp) / 100));
             }
-            if (rp) delete v.dataset.resumePercent;
+            applyPendingResume(v);
             var p = v.play();
             if (p && p.catch) p.catch(function() {});
           });
+          // m91: retry the pending resume as fragments/levels arrive
+          h.on(window.Hls.Events.FRAG_BUFFERED, function() { applyPendingResume(v); });
+          h.on(window.Hls.Events.LEVEL_UPDATED, function() { applyPendingResume(v); });
           // m90: surface only FATAL hls.js errors in the banner (network
           // errors self-recover; media errors get recovered by hls.js too)
           h.on(window.Hls.Events.ERROR, function(_evt, data) {
@@ -174,6 +177,29 @@
       var b = document.getElementById('player-error-banner');
       if (b) b.remove();
     }
+    // m91: apply a pending resume target once it is inside the seekable window
+    // (growing live-style playlists only become seekable as segments arrive)
+    function applyPendingResume(v) {
+      var t = parseFloat(v.dataset.resumeTarget || '');
+      if (!isFinite(t) || t <= 0) return;
+      var n = v.seekable.length;
+      var end = n ? v.seekable.end(n - 1) : 0;
+      if (t <= end + 0.5) {
+        v.currentTime = t;
+        delete v.dataset.resumeTarget;
+        delete v.dataset.resumePercent;
+      }
+    }
+    document.addEventListener('seekablechange', function(event) {
+      if (event.target && event.target.id === 'media-player') applyPendingResume(event.target);
+    }, true);
+    document.addEventListener('progress', function(event) {
+      if (event.target && event.target.id === 'media-player') applyPendingResume(event.target);
+    }, true);
+    setInterval(function() {
+      var v = document.getElementById('media-player');
+      if (v && v.dataset.resumeTarget) applyPendingResume(v);
+    }, 1000);
     document.addEventListener('error', function(event) {
       var v = event.target;
       // m90: when hls.js owns the element the browser's own attempt to demux

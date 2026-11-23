@@ -244,12 +244,13 @@ metaField m f =
 
 fallbackDesc : Api.Item -> String
 fallbackDesc it =
-    it.title
-        ++ " is a "
-        ++ it.mime
-        ++ " file ("
+    -- m91: no raw filename/filetype dump when there is no overview; just say
+    -- so and hint at the admin METADATA button (TMDB re-link)
+    "No description available for "
+        ++ it.title
+        ++ " yet ("
         ++ formatBytes it.size
-        ++ ") from your media library."
+        ++ "). An admin can match it to TMDB with the METADATA button."
 
 
 viewProgress : Maybe Int -> Html Msg
