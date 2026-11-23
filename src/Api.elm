@@ -492,9 +492,9 @@ fetchNew token toMsg =
         }
 
 
-{-| m34: artwork URL for an item: /Items/:id/Images/<kind>?api_key=<token>
-(kind = Primary | Backdrop | ...). Token appended when present (the image
-route is auth-gated in strict mode and <img> cannot carry headers). -}
+{-| m34/m89: artwork URL for an item: /Items/:id/Images/<kind>. The session
+cookie (fms_session, set at login) authenticates <img> requests - the token
+no longer goes into the URL (it leaked into history/logs via api_key=). -}
 imageUrl : Maybe String -> String -> String -> String
 imageUrl token id kind =
     baseUrl
@@ -502,13 +502,6 @@ imageUrl token id kind =
         ++ id
         ++ "/Images/"
         ++ kind
-        ++ (case token of
-                Just t ->
-                    "?api_key=" ++ Url.percentEncode t
-
-                Nothing ->
-                    ""
-           )
 
 
 {-| m34: the TMDB metadata object stored server-side
@@ -726,18 +719,11 @@ fetchSubtitles token itemId toMsg =
         }
 
 
-{-| m70: VTT URL for one subtitle source (token as api_key query param). -}
+{-| m70/m89: VTT URL for one subtitle source (auth via the session cookie). -}
 subtitleUrl : Maybe String -> String -> Int -> String
 subtitleUrl token itemId index =
     baseUrl
         ++ "/stream/" ++ itemId ++ "/subtitle/" ++ String.fromInt index
-        ++ (case token of
-                Just t ->
-                    "?api_key=" ++ Url.percentEncode t
-
-                Nothing ->
-                    ""
-           )
 
 
 {-| m33: POST /Items/:id/PlaybackInfo (empty JSON body, auth header) so the
@@ -755,43 +741,18 @@ fetchPlaybackInfo token itemId toMsg =
         }
 
 
-{-| m33: absolute media URL for a server-relative path (e.g. a
-TranscodingUrl), carrying the token as api_key (? or & depending on
-whether the path already has a query). -}
+{-| m33/m89: absolute media URL for a server-relative path (e.g. a
+TranscodingUrl); the session cookie authenticates the <video>/hls.js fetch. -}
 transcodingSrc : Maybe String -> String -> String -> String
 transcodingSrc token base path =
-    base
-        ++ path
-        ++ (case token of
-                Just t ->
-                    (if String.contains "?" path then
-                        "&api_key="
-
-                     else
-                        "?api_key="
-                    )
-                        ++ Url.percentEncode t
-
-                Nothing ->
-                    ""
-           )
+    base ++ path
 
 
-{-| m32: stream URL with the token as a Jellyfin-style api_key query param,
-because a <video src> cannot carry the X-Emby-Token header. `Nothing` (open
-mode / not logged in) appends nothing. -}
+{-| m32/m89: stream URL for direct play; the session cookie authenticates
+the <video src> (which cannot carry the X-Emby-Token header). -}
 streamUrl : Maybe String -> String -> String
 streamUrl token id =
-    baseUrl
-        ++ "/stream/"
-        ++ id
-        ++ (case token of
-                Just t ->
-                    "?api_key=" ++ Url.percentEncode t
-
-                Nothing ->
-                    ""
-           )
+    baseUrl ++ "/stream/" ++ id
 
 
 {-| One media request from GET /Requests (m20a/m20b backend, PascalCase).

@@ -226,12 +226,9 @@ pages (/dashboard, /api-docs), whose server-side auth gate runs before any
 page JS can read localStorage. -}
 tokenQuery : Maybe String -> String
 tokenQuery mToken =
-    case mToken of
-        Just t ->
-            "?api_key=" ++ t
-
-        Nothing ->
-            ""
+    -- m89: server pages authenticate via the fms_session cookie; the token
+    -- must NOT appear in the URL (history/bookmarks/logs leak)
+    ""
 
 
 {-| Top-right user icon: a 28x28 arrow-btn with a monochrome text glyph that

@@ -17,7 +17,7 @@ page (RealDetail) can render the same series section for episode cards. -}
 
 import Api
 import Html exposing (Html, button, div, img, option, select, span, text)
-import Html.Attributes exposing (class, selected, src, style, value)
+import Html.Attributes exposing (class, classList, selected, src, style, value)
 import Html.Events exposing (onClick, onInput)
 import Types exposing (Model, Msg(..), Screen(..))
 
@@ -206,8 +206,17 @@ episodeRow model seriesName season ep =
             label ++ "  " ++ Maybe.withDefault "" ep.name
     in
     div
-        [ class "flex items-center gap-4 pa3 ba b--default bg-panel"
+        [ class "flex items-center gap-4 pa3 ba b--default bg-panel"  -- m89: whole row plays when downloaded
+        , classList [ ( "pointer", ep.downloaded ) ]
         , style "opacity" (if ep.downloaded then "1" else "0.45")
+        , onClick
+            (case ( ep.downloaded, mItem ) of
+                ( True, Just item ) ->
+                    OpenRealPlayer item
+
+                _ ->
+                    NoOp
+            )
         ]
         [ case ep.stillUrl of
             Just url ->

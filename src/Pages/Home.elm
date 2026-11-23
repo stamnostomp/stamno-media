@@ -33,6 +33,17 @@ heroItem model =
             List.head model.library
 
 
+{-| m89: the hero item has in-progress watch state (2%..95%). -}
+heroInProgress : Model -> Api.Item -> Bool
+heroInProgress model item =
+    case List.head (List.filter (\c -> c.id == item.id) model.continueWatching) of
+        Just c ->
+            c.progress > 2 && c.progress < 95
+
+        Nothing ->
+            False
+
+
 viewHero : Model -> Html Msg
 viewHero model =
     let
@@ -62,7 +73,16 @@ viewHero model =
                 , div [ class "relative flex flex-column gap-3", style "max-width" "640px" ]
                     [ div [ class "f1 ttu b tracked-wide fg-primary" ] [ text item.displayTitle ]
                     , div [ class "flex gap-4 mt3" ]
-                        [ button [ class "btn btn-primary", onClick (OpenRealPlayer item) ] [ text "Play" ]
+                        [ button [ class "btn btn-primary", onClick (OpenRealPlayer item) ]
+                            [ text
+                                -- m89: match the detail page's RESUME label
+                                (if heroInProgress model item then
+                                    "▶ Resume"
+
+                                 else
+                                    "▶ Play"
+                                )
+                            ]
                         , button [ class "btn btn-ghost", onClick (OpenRealDetail item) ] [ text "More Info" ]
                         ]
                     ]

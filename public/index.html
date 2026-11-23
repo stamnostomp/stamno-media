@@ -15,6 +15,8 @@
     var app = Elm.Main.init({ node: document.getElementById("app") });
     app.ports.storeToken.subscribe(function(t) {
       if (t) localStorage.setItem('fmsToken', t); else localStorage.removeItem('fmsToken');
+      // m89: drop the session cookie too on sign-out
+      document.cookie = 'fms_session=; Max-Age=0; Path=/';
     });
     app.ports.tokenStored.send(localStorage.getItem('fmsToken') || '');
     app.ports.scrollRow.subscribe(function(msg) {
@@ -169,8 +171,9 @@
     // (sessions expire server-side after 90s without a ping), stop on end.
     var sessItem = null, sessId = null, lastPing = 0;
     function tokenQ() {
-      var t = localStorage.getItem('fmsToken');
-      return t ? '?api_key=' + encodeURIComponent(t) : '';
+      // m89: the fms_session cookie (set at login) authenticates these
+      // fire-and-forget calls; no token in the URL any more
+      return '';
     }
     function sendSession(itemId, stopped) {
       var now = Date.now();

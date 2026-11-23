@@ -20,11 +20,18 @@ update msg model =
     case msg of
         NavigateTo screen ->
             ( { model | screen = screen, userMenuOpen = False }
-            , if screen == Requests && List.isEmpty model.myRequests then
-                fetchRequestsData model.token
+            , Cmd.batch
+                [ if screen == Requests && List.isEmpty model.myRequests then
+                    fetchRequestsData model.token
 
-              else
-                Cmd.none
+                  else
+                    Cmd.none
+                , if screen == Requests && List.isEmpty model.trackers then
+                    Api.fetchTrackers model.token GotTrackers  -- m89: names for the torrent list
+
+                  else
+                    Cmd.none
+                ]
             )
 
         OpenDetail titleId ->

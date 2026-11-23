@@ -427,7 +427,11 @@ voteText : Maybe Float -> String
 voteText mVote =
     case mVote of
         Just v ->
-            "RATING " ++ String.fromFloat (toFloat (round (v * 10)) / 10)
+            if v <= 0 then
+                ""  -- m89: unrated titles should not show "RATING 0"
+
+            else
+                "RATING " ++ String.fromFloat (toFloat (round (v * 10)) / 10)
 
         Nothing ->
             ""

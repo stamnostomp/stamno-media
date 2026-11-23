@@ -2,9 +2,9 @@ module Pages.RealDetail exposing (view)
 
 import Api
 import Components exposing (displayRowCard, formatBytes, groupForDisplay, posterImage)
-import Html exposing (Html, button, div, input, span, text)
-import Html.Attributes exposing (class, disabled, placeholder, style, value)
-import Html.Events exposing (onClick, onInput)
+import Html exposing (Html, button, div, form, input, span, text)
+import Html.Attributes exposing (class, disabled, placeholder, style, type_, value)
+import Html.Events exposing (onClick, onInput, onSubmit)
 import Pages.Series
 import Types exposing (Model, Msg(..))
 
@@ -295,19 +295,21 @@ metaPickerView : Model -> Html Msg
 metaPickerView model =
     div [ class "ba b--default bg-panel pa3 flex flex-column gap-3", style "max-width" "640px" ]
         [ div [ class "flex gap-2 items-center" ]
-            [ input
-                [ class "f6 flex-auto"
-                , placeholder "SEARCH TMDB..."
-                , value model.metaQuery
-                , onInput SetMetaQuery
+            [ Html.form [ class "flex gap-2 items-center flex-auto", onSubmit MetaSearchSubmit ]  -- m89: Enter submits
+                [ input
+                    [ class "f6 flex-auto"
+                    , placeholder "SEARCH TMDB..."
+                    , value model.metaQuery
+                    , onInput SetMetaQuery
+                    ]
+                    []
+                , button
+                    [ class "btn btn-primary"
+                    , disabled model.metaBusy
+                    , type_ "submit"
+                    ]
+                    [ text (if model.metaBusy then "..." else "SEARCH") ]
                 ]
-                []
-            , button
-                [ class "btn btn-primary"
-                , disabled model.metaBusy
-                , onClick MetaSearchSubmit
-                ]
-                [ text (if model.metaBusy then "..." else "SEARCH") ]
             , button [ class "btn", onClick CloseMetaPicker ] [ text "CLOSE" ]
             ]
         , case model.metaNote of

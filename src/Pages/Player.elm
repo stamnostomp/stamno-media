@@ -158,10 +158,10 @@ trackNodes token itemId subs =
                  , Attr.attribute "label"
                     (case s.language of
                         Just l ->
-                            l
+                            languageName l  -- m89: "eng" -> "English", never the file path
 
                         Nothing ->
-                            Maybe.withDefault ("Sub " ++ String.fromInt s.index) s.file
+                            "Sub " ++ String.fromInt s.index
                     )
                  ]
                     ++ (if s.index == defaultIndex then
@@ -440,6 +440,26 @@ viewDemo activeId =
             ]
         ]
 
+
+
+{-| m89: ISO 639 code -> readable language name for the CC menu. -}
+languageName : String -> String
+languageName code =
+    case String.toLower code of
+        "eng" -> "English"
+        "spa" -> "Spanish"
+        "por" -> "Portuguese"
+        "fra" -> "French"
+        "deu" -> "German"
+        "ita" -> "Italian"
+        "jpn" -> "Japanese"
+        "kor" -> "Korean"
+        "zho" -> "Chinese"
+        "rus" -> "Russian"
+        "nld" -> "Dutch"
+        "swe" -> "Swedish"
+        "und" -> "Unknown"
+        other -> String.toUpper other
 
 
 {-| m75: the "SKIP INTRO" button while the playhead is inside the intro
