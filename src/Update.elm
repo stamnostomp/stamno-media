@@ -843,8 +843,16 @@ update msg model =
                 , reqNotice = Nothing
                 , reqLoading = False
               }
-            , Ports.storeToken ""
+            , Cmd.batch
+                -- m93: revoke the session server-side (HttpOnly cookie cannot
+                -- be cleared from JS) AND drop the local token
+                [ Api.logout model.token LogoutDone
+                , Ports.storeToken ""
+                ]
             )
+
+        LogoutDone ->
+            ( model, Cmd.none )
 
         GotUnauthorized ->
             ( { model | needsAuth = True }, Cmd.none )

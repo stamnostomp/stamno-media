@@ -80,10 +80,15 @@ viewReal item token playSrc videoState controlsVisible maybeResumeProgress subti
             ]
             [ div [ class "f6 tracked-wide ttu" ] [ text item.displayTitle ]
             , div [ class "flex items-center gap-3" ]
-                [ -- m33: TRANSCODING badge when the server told us to transcode
+                [ -- m33/m93: TRANSCODING badge when the server told us to transcode,
+                  -- but only until playback is actually underway
                   case playSrc of
                     Just _ ->
-                        div [ class "ba b--default f7 tracked-wide ttu fg-muted", style "padding" "2px 8px" ] [ text "TRANSCODING" ]
+                        if videoState.paused then
+                            div [ class "ba b--default f7 tracked-wide ttu fg-muted", style "padding" "2px 8px" ] [ text "TRANSCODING" ]
+
+                        else
+                            text ""
 
                     Nothing ->
                         text ""

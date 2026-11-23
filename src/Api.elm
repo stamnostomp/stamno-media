@@ -36,6 +36,7 @@ module Api exposing
     , fetchPopular
     , fetchRequests
     , RequestsPage
+    , logout
     , fetchSeriesEpisodes
     , fetchSeriesSearch
     , fetchTrackers
@@ -909,6 +910,21 @@ encodeCreateRequest p =
             ++ encodeMaybe "SizeBytes" Encode.int p.sizeBytes
             ++ encodeMaybe "Magnet" Encode.string p.magnet
             ++ encodeMaybe "DownloadUrl" Encode.string p.downloadUrl
+
+
+{-| m93: POST /Users/Logout — revoke the session server-side (the HttpOnly
+fms_session cookie can only be cleared by the server). Fire-and-forget. -}
+logout : Maybe String -> msg -> Cmd msg
+logout token toMsg =
+    Http.request
+        { method = "POST"
+        , headers = authHeader token
+        , url = baseUrl ++ "/Users/Logout"
+        , body = Http.emptyBody
+        , expect = Http.expectWhatever (\_ -> toMsg)
+        , timeout = Just 5000
+        , tracker = Nothing
+        }
 
 
 {-| GET /Requests -> the {"Requests": [...]} envelope (non-admins get only

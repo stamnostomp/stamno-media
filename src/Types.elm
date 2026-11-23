@@ -290,6 +290,7 @@ type Msg
     | SubmitLogin
     | GotAuth (Result Http.Error Api.AuthResult)
     | SignOut
+    | LogoutDone
     | GotUnauthorized
     | NoOp
 
