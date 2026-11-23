@@ -237,12 +237,17 @@
       // m90: hls.js path resumes in MANIFEST_PARSED with the server-probed
       // duration (the growing playlist makes v.duration wrong here)
       if (v.dataset.hlsJs === '1') return;
+      // m91: do NOT consume data-resume-percent here. The player first renders
+      // with the direct /stream src and only switches to the HLS playlist when
+      // PlaybackInfo arrives; consuming the attribute on the direct load loses
+      // the resume position when hls.js then restarts at 0. Apply (idempotent)
+      // but leave the attribute for the MANIFEST_PARSED path.
       var resumePercent = v.dataset.resumePercent;
       var dur = realDuration(v);
       if (resumePercent && dur > 0) {
-        v.currentTime = dur * (parseFloat(resumePercent) / 100);
+        var target = dur * (parseFloat(resumePercent) / 100);
+        if (Math.abs(v.currentTime - target) > 5) v.currentTime = target;
       }
-      delete v.dataset.resumePercent;
     }, true);
 
     // Periodically reports playback position to the server so it can
