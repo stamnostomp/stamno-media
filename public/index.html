@@ -49,6 +49,7 @@
           // that pending load clobbers the MSE attach -- so abort it
           // first: drop the attribute and reset the element with load().
           v.removeAttribute('src');
+          v.removeAttribute('autoplay'); // m95: we drive play() explicitly
           v.load();
           var h = new window.Hls({ startPosition: 0, liveSyncDurationCount: 3 });
           h.loadSource(src);
@@ -69,9 +70,13 @@
               v.dataset.resumeArmed = String(Date.now());
             }
             if (v.dataset.resumeTarget) {
-              // m94: if the target is not seekable yet, wait (paused, overlay)
-              // instead of playing from 0; applyPendingResume plays on arrival
-              if (!applyPendingResume(v)) showResumeWait(v, parseFloat(v.dataset.resumeTarget));
+              // m94/m95: if the target is not seekable yet, WAIT paused with the
+              // overlay instead of playing from 0; applyPendingResume seeks+plays
+              // once the playlist covers the target
+              if (!applyPendingResume(v)) {
+                showResumeWait(v, parseFloat(v.dataset.resumeTarget));
+                v.pause();
+              }
             } else {
               var p = v.play();
               if (p && p.catch) p.catch(function() {});
@@ -80,10 +85,29 @@
           // m91: retry the pending resume as fragments/levels arrive
           h.on(window.Hls.Events.FRAG_BUFFERED, function() { applyPendingResume(v); });
           h.on(window.Hls.Events.LEVEL_UPDATED, function() { applyPendingResume(v); });
-          // m90: surface only FATAL hls.js errors in the banner (network
-          // errors self-recover; media errors get recovered by hls.js too)
+          // m90/m95: recover hls.js errors instead of freezing: fatal network
+          // errors -> startLoad again, fatal media errors -> recoverMediaError,
+          // buffer stalls -> nudge. Only surface a banner after repeated
+          // failures of the same kind.
+          var errTries = {};
           h.on(window.Hls.Events.ERROR, function(_evt, data) {
-            if (data && data.fatal) showPlayerError((data.details || 'hls.js fatal error') + ' - the transcode may have failed, try again or pick another release.');
+            if (!data) return;
+            var k = data.type + ':' + data.details;
+            errTries[k] = (errTries[k] || 0) + 1;
+            if (data.fatal) {
+              if (data.type === window.Hls.ErrorTypes.NETWORK_ERROR && errTries[k] <= 3) {
+                h.startLoad();
+              } else if (data.type === window.Hls.ErrorTypes.MEDIA_ERROR && errTries[k] <= 3) {
+                h.recoverMediaError();
+              } else if (errTries[k] > 3) {
+                showPlayerError((data.details || 'hls.js fatal error') + ' - the transcode may have failed, try again or pick another release.');
+              }
+            } else if (data.details === 'bufferStalledError' && errTries[k] <= 5) {
+              // playback froze on an empty buffer: restart loading and, if we
+              // are not waiting on a resume target, make sure we are playing
+              h.startLoad();
+              if (!v.dataset.resumeTarget && v.paused) { var p2 = v.play(); if (p2 && p2.catch) p2.catch(function() {}); }
+            }
           });
           hlsInstance = h;
           v.dataset.hlsActive = '1';
@@ -256,7 +280,10 @@
     }, true);
     // m90: once playback actually starts any earlier error is stale -- clear it
     document.addEventListener('playing', function(event) {
-      if (event.target && event.target.id === 'media-player') { hidePlayerError(); hideResumeWait(); }
+      if (event.target && event.target.id === 'media-player') {
+        hidePlayerError();
+        if (!event.target.dataset.resumeTarget) hideResumeWait();
+      }
     }, true);
     // m94: mute while the tab runs in the background, restore on return
     // (only when the user had not muted manually)
