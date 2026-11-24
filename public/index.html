@@ -258,6 +258,18 @@
     document.addEventListener('playing', function(event) {
       if (event.target && event.target.id === 'media-player') { hidePlayerError(); hideResumeWait(); }
     }, true);
+    // m94: mute while the tab runs in the background, restore on return
+    // (only when the user had not muted manually)
+    document.addEventListener('visibilitychange', function() {
+      var v = document.getElementById('media-player');
+      if (!v) return;
+      if (document.hidden) {
+        if (!v.muted) { v.dataset.wasMuted = '0'; v.muted = true; }
+      } else if (v.dataset.wasMuted === '0') {
+        v.muted = false;
+        delete v.dataset.wasMuted;
+      }
+    });
     ['loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
       document.addEventListener(evt, function(event) {
         if (event.target && event.target.id === 'media-player') reportVideoStatus();
