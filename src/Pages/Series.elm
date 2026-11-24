@@ -34,6 +34,32 @@ view model =
             in
             div [ class "pa4" ]
                 [ seriesHeaderView model title
+                , -- m96: a way to (re)start/resume the show from its page:
+                  -- RESUME targets the in-progress episode, else PLAY starts
+                  -- the first downloaded one
+                  case playTargetEpisode model of
+                    Just target ->
+                        let
+                            p =
+                                progressOf model target
+                        in
+                        div [ class "flex gap-4 pb4" ]
+                            [ button
+                                [ class "btn btn-primary"
+                                , onClick (OpenRealPlayer target)
+                                ]
+                                [ text
+                                    (if p > 0 && p < 100 then
+                                        "\u{25B6} RESUME"
+
+                                     else
+                                        "\u{25B6} PLAY"
+                                    )
+                                ]
+                            ]
+
+                    Nothing ->
+                        text ""
                 , seriesEpisodesView model title
                 ]
 
@@ -130,6 +156,16 @@ seriesEpisodesView model title =
                 Nothing ->
                     text ""
             ]
+
+
+{-| m96: continue-watching progress (0..100) of a library item, 0 when absent. -}
+progressOf : Model -> Api.Item -> Int
+progressOf model item =
+    model.continueWatching
+        |> List.filter (\c -> c.id == item.id)
+        |> List.head
+        |> Maybe.map .progress
+        |> Maybe.withDefault 0
 
 
 {-| m55 (shared, pure): the PLAY target for the series of the active detail
@@ -245,11 +281,23 @@ episodeRow model seriesName season ep =
             [ if ep.downloaded then
                 case mItem of
                     Just item ->
+                        let
+                            p =
+                                progressOf model item
+                        in
                         button
                             [ class "btn btn-primary f7 ttu tracked-wide"
                             , onClick (OpenRealPlayer item)
                             ]
-                            [ text "PLAY" ]
+                            -- m96: RESUME when this episode is in progress
+                            [ text
+                                (if p > 0 && p < 100 then
+                                    "RESUME"
+
+                                 else
+                                    "PLAY"
+                                )
+                            ]
 
                     Nothing ->
                         span [ class "f7 ttu tracked-wide fg-muted" ] [ text "DOWNLOADED" ]
