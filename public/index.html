@@ -66,10 +66,16 @@
             var rd = parseFloat(v.dataset.realDuration || '');
             if (rp && isFinite(rd) && rd > 0) {
               v.dataset.resumeTarget = String(rd * (parseFloat(rp) / 100));
+              v.dataset.resumeArmed = String(Date.now());
             }
-            applyPendingResume(v);
-            var p = v.play();
-            if (p && p.catch) p.catch(function() {});
+            if (v.dataset.resumeTarget) {
+              // m94: if the target is not seekable yet, wait (paused, overlay)
+              // instead of playing from 0; applyPendingResume plays on arrival
+              if (!applyPendingResume(v)) showResumeWait(v, parseFloat(v.dataset.resumeTarget));
+            } else {
+              var p = v.play();
+              if (p && p.catch) p.catch(function() {});
+            }
           });
           // m91: retry the pending resume as fragments/levels arrive
           h.on(window.Hls.Events.FRAG_BUFFERED, function() { applyPendingResume(v); });
@@ -182,18 +188,52 @@
       var b = document.getElementById('player-error-banner');
       if (b) b.remove();
     }
-    // m91: apply a pending resume target once it is inside the seekable window
-    // (growing live-style playlists only become seekable as segments arrive)
+    // m91/m94: apply a pending resume target once it is inside the seekable
+    // window (growing live-style playlists only become seekable as segments
+    // arrive). Returns true when the seek was applied. While waiting, show a
+    // "RESUMING AT ..." overlay and keep the video paused so the movie never
+    // visibly plays from 0:00 first.
+    function fmtClock(sec) {
+      sec = Math.max(0, Math.round(sec));
+      var h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), ss = sec % 60;
+      var mm = (h > 0 && m < 10) ? '0' + m : '' + m;
+      var s2 = (ss < 10) ? '0' + ss : '' + ss;
+      return (h > 0 ? h + ':' : '') + mm + ':' + s2;
+    }
+    function showResumeWait(v, target) {
+      var b = document.getElementById('resume-wait');
+      if (!b) {
+        b = document.createElement('div');
+        b.id = 'resume-wait';
+        b.style.cssText = 'position:absolute;top:12px;left:50%;transform:translateX(-50%);z-index:20;background:rgba(10,11,13,0.85);color:#fff;padding:8px 16px;font:13px sans-serif;border-radius:4px;border:1px solid rgba(255,255,255,0.2);';
+        var stage = document.getElementById('player-stage');
+        if (stage) stage.appendChild(b); else document.body.appendChild(b);
+      }
+      b.textContent = 'RESUMING AT ' + fmtClock(target) + ' ...';
+    }
+    function hideResumeWait() {
+      var b = document.getElementById('resume-wait');
+      if (b) b.remove();
+    }
     function applyPendingResume(v) {
       var t = parseFloat(v.dataset.resumeTarget || '');
-      if (!isFinite(t) || t <= 0) return;
+      if (!isFinite(t) || t <= 0) return false;
       var n = v.seekable.length;
       var end = n ? v.seekable.end(n - 1) : 0;
+      // m94: if the target is still beyond the grown playlist after 90s,
+      // clamp to the current end instead of waiting forever
+      var armed = parseFloat(v.dataset.resumeArmed || '0');
+      if (armed && Date.now() - armed > 90000 && end > 0) t = Math.min(t, end - 1);
       if (t <= end + 0.5) {
         v.currentTime = t;
         delete v.dataset.resumeTarget;
         delete v.dataset.resumePercent;
+        hideResumeWait();
+        var p = v.play();
+        if (p && p.catch) p.catch(function() {});
+        return true;
       }
+      return false;
     }
     document.addEventListener('seekablechange', function(event) {
       if (event.target && event.target.id === 'media-player') applyPendingResume(event.target);
@@ -216,7 +256,7 @@
     }, true);
     // m90: once playback actually starts any earlier error is stale -- clear it
     document.addEventListener('playing', function(event) {
-      if (event.target && event.target.id === 'media-player') hidePlayerError();
+      if (event.target && event.target.id === 'media-player') { hidePlayerError(); hideResumeWait(); }
     }, true);
     ['loadedmetadata', 'play', 'pause', 'volumechange', 'ended'].forEach(function(evt) {
       document.addEventListener(evt, function(event) {
