@@ -173,11 +173,23 @@ item -- the episode with continue-watching progress (0 < p < 100) if any,
 else the first downloaded episode's library item, else Nothing. -}
 playTargetEpisode : Model -> Maybe Api.Item
 playTargetEpisode model =
-    case model.activeRealItem |> Maybe.andThen .seriesName of
+    -- m96b: the series name comes from the SeriesView screen when the page was
+    -- opened from a series card (OpenSeries never sets activeRealItem), else
+    -- from the active detail item (episode detail page)
+    let
+        seriesName =
+            case model.screen of
+                SeriesView name ->
+                    Just name
+
+                _ ->
+                    model.activeRealItem |> Maybe.andThen .seriesName
+    in
+    case seriesName of
         Nothing ->
             Nothing
 
-        Just seriesName ->
+        Just seriesName_ ->
             let
                 seasons =
                     model.seriesDetail |> Maybe.map .seasons |> Maybe.withDefault []
@@ -191,7 +203,7 @@ playTargetEpisode model =
                     model.continueWatching
                         |> List.filter
                             (\c ->
-                                String.toLower (Maybe.withDefault "" c.seriesName) == String.toLower seriesName
+                                String.toLower (Maybe.withDefault "" c.seriesName) == String.toLower seriesName_
                                     && c.progress > 0
                                     && c.progress < 100
                             )
@@ -204,7 +216,7 @@ playTargetEpisode model =
 
                 Nothing ->
                     List.head downloaded
-                        |> Maybe.andThen (\( se, ep ) -> findLibraryItem model.library seriesName se ep)
+                        |> Maybe.andThen (\( se, ep ) -> findLibraryItem model.library seriesName_ se ep)
 
 
 seasonSection : Model -> String -> Api.SeriesSeason -> Html Msg
