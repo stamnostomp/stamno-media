@@ -93,6 +93,10 @@ type alias Model =
     , reqNotice : Maybe String
     , reqLoading : Bool
     , reqPollAcc : Float
+    -- Discover search-as-typing: Nothing = no timer, Just acc = ms since the
+    -- last keystroke; reqSearchPending identifies the request in flight.
+    , reqLiveSearchAcc : Maybe Float
+    , reqSearchPending : Maybe String
     , popularMovies : List Api.DiscoverItem
     , popularShows : List Api.DiscoverItem
     , searchMovies : List Api.DiscoverItem
@@ -161,6 +165,8 @@ init _ =
       , reqNotice = Nothing
       , reqLoading = False
       , reqPollAcc = 0
+      , reqLiveSearchAcc = Nothing
+      , reqSearchPending = Nothing
       , popularMovies = []
       , popularShows = []
       , searchMovies = []

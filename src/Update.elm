@@ -399,10 +399,10 @@ update msg model =
         SetTab tab ->
             case tab of
                 Mine ->
-                    ( { model | requestsTab = tab }, Api.fetchRequests model.token GotRequests )
+                    ( { model | requestsTab = tab, reqLiveSearchAcc = Nothing, reqSearchPending = Nothing }, Api.fetchRequests model.token GotRequests )
 
                 Discover ->
-                    ( { model | requestsTab = tab }
+                    ( { model | requestsTab = tab, reqLiveSearchAcc = Nothing, reqSearchPending = Nothing }
                     , if List.isEmpty model.trackers then
                         Api.fetchTrackers model.token GotTrackers
 
@@ -437,12 +437,52 @@ update msg model =
                         ( model, Cmd.none )
 
         SetReqQuery q ->
-            ( { model | reqQuery = q }, Cmd.none )
+            -- m97: typing in Discover searches TMDB live after a short pause.
+            -- Reset any picked-card state so the new results replace the old
+            -- card/series/release view.
+            ( { model
+                | reqQuery = q
+                , reqLiveSearchAcc =
+                    if String.isEmpty (String.trim q) then
+                        Nothing
+
+                    else
+                        Just 0
+                , reqSearchPending = Nothing
+                , reqLoading = False
+                , reqNotice = Nothing
+                , releases = []
+                , discoverShow = Nothing
+                , reqTmdbId = Nothing
+                , reqYear = Nothing
+                , reqSeason = Nothing
+                , reqEpisode = Nothing
+                , reqKind = Nothing
+                , seriesDetail = Nothing
+                , seriesSeason = Nothing
+                , searchMovies = []
+                , searchShows = []
+              }
+            , Cmd.none
+            )
 
         SearchReleases ->
             -- m59: Search shows TMDB result cards for the query (not the
-            -- torrent list yet); clicking a card runs the indexer search
-            ( { model | reqLoading = True, reqNotice = Nothing, releases = [], reqTmdbId = Nothing, reqYear = Nothing, reqSeason = Nothing, reqEpisode = Nothing, reqKind = Nothing }
+            -- torrent list yet); clicking a card runs the indexer search.
+            -- m97: an explicit Search (button/Enter) runs immediately and
+            -- cancels the pending debounce so no duplicate request is sent.
+            ( { model
+                | reqLoading = True
+                , reqNotice = Nothing
+                , releases = []
+                , reqTmdbId = Nothing
+                , reqYear = Nothing
+                , reqSeason = Nothing
+                , reqEpisode = Nothing
+                , reqKind = Nothing
+                , reqLiveSearchAcc = Nothing
+                , reqSearchPending = Just model.reqQuery
+              }
             , Api.fetchDiscoverSearch model.token model.reqQuery GotDiscoverSearch
             )
 
@@ -465,6 +505,8 @@ update msg model =
                         , reqNotice = Nothing
                         , searchMovies = []
                         , searchShows = []
+                        , reqLiveSearchAcc = Nothing
+                        , reqSearchPending = Nothing
                     }
             in
             ( model2, searchIndexersCmd model2 (searchQueries item.name item.originalName) )
@@ -487,6 +529,8 @@ update msg model =
                 , searchShows = []
                 , reqLoading = True
                 , reqNotice = Nothing
+                , reqLiveSearchAcc = Nothing
+                , reqSearchPending = Nothing
               }
             , Api.fetchSeriesSearch model.token item.name GotSeriesSearch
             )
@@ -504,6 +548,8 @@ update msg model =
                 , releases = []
                 , searchMovies = []
                 , searchShows = []
+                , reqLiveSearchAcc = Nothing
+                , reqSearchPending = Nothing
               }
             , Cmd.none
             )
@@ -535,6 +581,8 @@ update msg model =
                         , releases = []
                         , reqLoading = True
                         , reqNotice = Nothing
+                        , reqLiveSearchAcc = Nothing
+                        , reqSearchPending = Nothing
                     }
             in
             ( model2, Api.searchIndexersTv model.token qs season (Just ep) GotReleases )
@@ -560,6 +608,8 @@ update msg model =
                         , releases = []
                         , reqLoading = True
                         , reqNotice = Nothing
+                        , reqLiveSearchAcc = Nothing
+                        , reqSearchPending = Nothing
                     }
             in
             ( model2, Api.searchIndexersTv model.token qs season Nothing GotReleases )
@@ -579,16 +629,30 @@ update msg model =
         -- m59: Search now fetches TMDB cards; clicking a card (PickPopular)
         -- runs the indexer search and shows the torrent list
         GotDiscoverSearch result ->
-            case result of
-                Ok ( movies, shows ) ->
-                    ( { model | searchMovies = movies, searchShows = shows, reqLoading = False, needsAuth = False }, Cmd.none )
+            -- m97: a slow response from an older query must not overwrite the
+            -- current search results.
+            if model.reqSearchPending /= Just model.reqQuery then
+                ( model, Cmd.none )
 
-                Err err ->
-                    if isUnauthorized err then
-                        ( { model | needsAuth = True }, Cmd.none )
+            else
+                case result of
+                    Ok ( movies, shows ) ->
+                        ( { model
+                            | searchMovies = movies
+                            , searchShows = shows
+                            , reqLoading = False
+                            , reqSearchPending = Nothing
+                            , needsAuth = False
+                          }
+                        , Cmd.none
+                        )
 
-                    else
-                        ( { model | reqLoading = False }, Cmd.none )
+                    Err err ->
+                        if isUnauthorized err then
+                            ( { model | needsAuth = True, reqSearchPending = Nothing }, Cmd.none )
+
+                        else
+                            ( { model | reqLoading = False, reqSearchPending = Nothing }, Cmd.none )
 
         GotReleases result ->
             case result of
@@ -666,6 +730,40 @@ update msg model =
 
         Tick delta ->
             let
+                -- m97: live Discover search shares the animation-frame Tick
+                -- with the /Requests poll. It only runs on Discover with a
+                -- nonblank query and no picked card/release view in front.
+                liveSearchReady =
+                    model.screen == Requests
+                        && model.requestsTab == Discover
+                        && not (String.isEmpty (String.trim model.reqQuery))
+                        && List.isEmpty model.releases
+                        && model.discoverShow == Nothing
+
+                fireLiveSearch =
+                    liveSearchReady
+                        && model.reqSearchPending == Nothing
+                        && (Maybe.map (\acc -> acc + delta >= 350) model.reqLiveSearchAcc
+                                |> Maybe.withDefault False
+                           )
+
+                liveAcc1 =
+                    if fireLiveSearch then
+                        Nothing
+
+                    else if liveSearchReady then
+                        Maybe.map (\acc -> acc + delta) model.reqLiveSearchAcc
+
+                    else
+                        Nothing
+
+                liveSearchCmd =
+                    if fireLiveSearch then
+                        Api.fetchDiscoverSearch model.token model.reqQuery GotDiscoverSearch
+
+                    else
+                        Cmd.none
+
                 isPlayingVideo =
                     model.screen == Player && not model.videoState.paused
 
@@ -711,8 +809,21 @@ update msg model =
                 , idleTime = newIdleTime
                 , controlsVisible = newControlsVisible
                 , reqPollAcc = acc1
+                , reqLiveSearchAcc = liveAcc1
+                , reqLoading =
+                    if fireLiveSearch then
+                        True
+
+                    else
+                        model.reqLoading
+                , reqSearchPending =
+                    if fireLiveSearch then
+                        Just model.reqQuery
+
+                    else
+                        model.reqSearchPending
               }
-            , pollCmd
+            , Cmd.batch [ pollCmd, liveSearchCmd ]
             )
 
         GotViewport vp ->
