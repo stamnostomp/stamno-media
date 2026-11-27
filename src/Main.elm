@@ -20,6 +20,7 @@ main =
                     [ Browser.Events.onAnimationFrameDelta Tick
                     , Browser.Events.onResize WindowResized
                     , Ports.videoStatus GotVideoStatus
+                    , Ports.videoEnded VideoEnded
                     , Ports.tokenStored GotStoredToken
                     ]
         }

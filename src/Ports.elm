@@ -1,4 +1,4 @@
-port module Ports exposing (scrollRow, storeToken, tokenStored, videoCommand, videoStatus)
+port module Ports exposing (scrollRow, storeToken, tokenStored, videoCommand, videoEnded, videoStatus)
 
 
 port scrollRow : { rowId : String, delta : Float } -> Cmd msg
@@ -16,6 +16,10 @@ port videoCommand : { action : String, value : Float } -> Cmd msg
 volumechange event of the real `<video>` element.
 -}
 port videoStatus : ({ currentTime : Float, duration : Float, paused : Bool, muted : Bool, volume : Float } -> msg) -> Sub msg
+
+
+{-| Item id of the real `<video>` element that fired a native `ended` event. -}
+port videoEnded : (String -> msg) -> Sub msg
 
 
 {-| Persist (or clear, on empty string) the auth token in localStorage. -}

@@ -175,6 +175,7 @@ suite =
 fakeRelease : Api.Release
 fakeRelease =
     { title = "Fake release"
+    , indexerName = Nothing
     , sizeBytes = Nothing
     , seeders = Nothing
     , downloadUrl = Nothing
