@@ -115,6 +115,7 @@ type alias Model =
     , intro : Maybe ( Float, Float )
     , ccOn : Bool
     , videoState : VideoState
+    , endedHandled : Bool
     , controlsVisible : Bool
     , idleTime : Float
     , resumeProgress : Maybe Int
@@ -185,6 +186,7 @@ init _ =
       , intro = Nothing
       , ccOn = False
       , videoState = initialVideoState
+      , endedHandled = False
       , controlsVisible = True
       , idleTime = 0
       , resumeProgress = Nothing
@@ -286,6 +288,7 @@ type Msg
     | VideoWheelVolume Float
     | VideoFullscreen
     | GotVideoStatus VideoState
+    | VideoEnded String
     | PlayerActivity
     | ToggleUserMenu
     | CloseUserMenu

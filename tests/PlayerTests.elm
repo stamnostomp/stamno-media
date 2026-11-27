@@ -4,6 +4,7 @@ import Api
 import Expect
 import Test exposing (Test, describe, test)
 import Types
+import Update
 
 
 mkItem : String -> String -> Maybe String -> Maybe Int -> Maybe Int -> Api.Item
@@ -41,6 +42,35 @@ mkSeason n eps =
 mkDetail : List Api.SeriesSeason -> Api.SeriesDetail
 mkDetail seasons =
     { id = "1434", name = Just "Family Guy", year = Just 1999, overview = Nothing, posterUrl = Nothing, seasons = seasons }
+
+
+nowPlayingId : Types.Model -> Maybe String
+nowPlayingId model =
+    case model.nowPlaying of
+        Types.RealPlaying item ->
+            Just item.id
+
+        Types.DemoPlaying ->
+            Nothing
+
+
+autoplayModel : Types.Model
+autoplayModel =
+    let
+        ( initial, _ ) =
+            Types.init ()
+
+        current =
+            mkItem "9" "Episode" (Just "Family Guy") (Just 25) (Just 0)
+
+        next =
+            mkItem "10" "Episode" (Just "Family Guy") (Just 25) (Just 1)
+    in
+    { initial
+        | library = [ current, next ]
+        , seriesDetail = Just (mkDetail [ mkSeason 25 [ mkEp 0 True, mkEp 1 True ] ])
+        , nowPlaying = Types.RealPlaying current
+    }
 
 
 suite : Test
@@ -108,5 +138,42 @@ suite =
                 \_ ->
                     Types.nextEpisodeItem [] Nothing (mkItem "9" "Episode" (Just "Family Guy") (Just 25) (Just 0))
                         |> Expect.equal Nothing
+            ]
+        , describe "video ended event autoplay"
+            [ test "matching item id advances to the next episode" <|
+                \_ ->
+                    Update.update (Types.VideoEnded "9") autoplayModel
+                        |> Tuple.first
+                        |> nowPlayingId
+                        |> Expect.equal (Just "10")
+            , test "stale item id is ignored" <|
+                \_ ->
+                    Update.update (Types.VideoEnded "old") autoplayModel
+                        |> Tuple.first
+                        |> nowPlayingId
+                        |> Expect.equal (Just "9")
+            , test "repeat ended events for the same playback are ignored" <|
+                \_ ->
+                    let
+                        handled =
+                            { autoplayModel | endedHandled = True }
+                    in
+                    Update.update (Types.VideoEnded "9") handled
+                        |> Tuple.first
+                        |> nowPlayingId
+                        |> Expect.equal (Just "9")
+            , test "opening a real player resets the ended guard" <|
+                \_ ->
+                    let
+                        handled =
+                            { autoplayModel | endedHandled = True }
+
+                        item =
+                            mkItem "9" "Episode" (Just "Family Guy") (Just 25) (Just 0)
+                    in
+                    Update.update (Types.OpenRealPlayer item) handled
+                        |> Tuple.first
+                        |> .endedHandled
+                        |> Expect.equal False
             ]
         ]

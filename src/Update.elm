@@ -237,6 +237,7 @@ update msg model =
                 , intro = Nothing
                 , ccOn = False
                 , videoState = initialVideoState
+                , endedHandled = False
                 , controlsVisible = True
                 , idleTime = 0
                 , previousScreen = model.screen
@@ -1003,6 +1004,24 @@ update msg model =
 
         VideoFullscreen ->
             ( model, Ports.videoCommand { action = "fullscreen", value = 0 } )
+
+        VideoEnded itemId ->
+            -- Ignore stale and duplicate ended events; only the first
+            -- matching event for a playback advances.
+            if model.endedHandled then
+                ( model, Cmd.none )
+
+            else
+                case nowPlayingItem model of
+                    Just item ->
+                        if item.id == itemId then
+                            update PlayNextEpisode { model | endedHandled = True }
+
+                        else
+                            ( model, Cmd.none )
+
+                    Nothing ->
+                        ( model, Cmd.none )
 
         GotVideoStatus status ->
             -- m86: when the server probed a real duration, it wins over the

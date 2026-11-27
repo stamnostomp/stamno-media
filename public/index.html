@@ -403,7 +403,10 @@
       if (event.target && event.target.id === 'media-player') {
         sendProgress();
         var id = event.target.dataset.itemId;
-        if (id) sendSession(id, true);
+        if (id) {
+          sendSession(id, true);
+          app.ports.videoEnded.send(id);
+        }
       }
     }, true);
   </script>
