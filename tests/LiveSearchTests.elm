@@ -180,6 +180,7 @@ fakeRelease =
     , downloadUrl = Nothing
     , magnet = Nothing
     , trackerId = ""
+    , indexerName = Nothing
     }
 
 
